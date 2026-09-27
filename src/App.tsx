@@ -8,6 +8,7 @@ import { LocomotivesPage } from './pages/fleet/LocomotivesPage'
 import { SetEditPage } from './pages/fleet/SetEditPage'
 import { SetsPage } from './pages/fleet/SetsPage'
 import { BackupPage } from './pages/BackupPage'
+import { FormsPage } from './pages/FormsPage'
 import { Home } from './pages/Home'
 import { PracticePage } from './pages/PracticePage'
 import { StaffPage } from './pages/StaffPage'
@@ -36,6 +37,7 @@ const router = createHashRouter([
       { path: 'staff', element: <StaffPage /> },
       { path: 'backup', element: <BackupPage /> },
       { path: 'practice', element: <PracticePage /> },
+      { path: 'forms', element: <FormsPage /> },
       {
         path: 'fleet',
         element: <FleetLayout />,
