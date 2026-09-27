@@ -1084,3 +1084,215 @@ select.add-staff {
 .stats-card {
   border-left-color: var(--accent);
 }
+
+/* ---------- Season stats ---------- */
+/* Chart colours validated for colour-blind separation: an accent green for the series the
+   chart is about, and a deliberately grey context series. */
+:root {
+  --viz-accent: #008300;
+  --viz-context: #9a9d8c;
+  --viz-grid: #e6e8dc;
+  --viz-baseline: #c3c6b3;
+  --viz-ink-muted: #6b7059;
+  --viz-good: #006300;
+  --viz-bad: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --viz-accent: #1f9e3a;
+    --viz-context: #5b6149;
+    --viz-grid: #2c3120;
+    --viz-baseline: #3f4630;
+    --viz-ink-muted: #a8ad96;
+    --viz-good: #3fc15a;
+    --viz-bad: #ff8a80;
+  }
+}
+:root[data-theme='dark'] {
+  --viz-accent: #1f9e3a;
+  --viz-context: #5b6149;
+  --viz-grid: #2c3120;
+  --viz-baseline: #3f4630;
+  --viz-ink-muted: #a8ad96;
+  --viz-good: #3fc15a;
+  --viz-bad: #ff8a80;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.filter-row .field {
+  min-width: 10rem;
+}
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.75rem;
+}
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.stat-label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.stat-value {
+  font-size: 1.9rem;
+  font-weight: 650;
+  line-height: 1.1;
+}
+.stat-delta {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.stat-delta.good {
+  color: var(--viz-good);
+}
+.stat-delta.bad {
+  color: var(--viz-bad);
+}
+.stat-delta .meta {
+  font-weight: 400;
+}
+
+.viz-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+.viz-card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.viz-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.viz-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.viz-toggle {
+  min-height: 34px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+}
+.viz-plot {
+  position: relative;
+  width: 100%;
+}
+.viz-plot svg {
+  display: block;
+  overflow: visible;
+}
+.viz-grid {
+  stroke: var(--viz-grid);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.viz-baseline {
+  stroke: var(--viz-baseline);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.viz-axis-label {
+  fill: var(--viz-ink-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.viz-row-label {
+  fill: var(--text);
+  font-size: 13px;
+}
+.viz-value {
+  fill: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.viz-mark.accent {
+  fill: var(--viz-accent);
+}
+.viz-mark.context {
+  fill: var(--viz-context);
+}
+.viz-hit {
+  fill: transparent;
+  cursor: default;
+  outline: none;
+}
+.viz-hit:hover,
+.viz-hit:focus-visible {
+  fill: var(--viz-grid);
+  fill-opacity: 0.45;
+}
+.viz-tooltip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 6px));
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  z-index: 3;
+}
+.viz-tooltip-title {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.viz-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.viz-key {
+  display: inline-block;
+  flex: none;
+}
+.viz-key.line {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+}
+.viz-key.box {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 0.35rem;
+}
+.viz-key.accent {
+  background: var(--viz-accent);
+}
+.viz-key.context {
+  background: var(--viz-context);
+}
+.viz-legend {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.viz-legend span {
+  display: inline-flex;
+  align-items: center;
+}
+.viz-table {
+  font-size: 0.9rem;
+}
+.plain-list {
+  margin: 0;
+  padding-left: 1.2rem;
+}
