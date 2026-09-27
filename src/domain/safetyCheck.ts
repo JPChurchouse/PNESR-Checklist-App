@@ -292,20 +292,3 @@ export function pruneResults(check: SafetyCheck): SafetyCheck {
   const results = Object.fromEntries(Object.entries(check.results).filter(([k]) => keys.has(k)))
   return { ...check, results }
 }
-
-/** The revisions a check amends, oldest first, ending with the check itself. */
-export function revisionChain(check: SafetyCheck, all: SafetyCheck[]): SafetyCheck[] {
-  const byId = new Map(all.map((c) => [c.id, c]))
-  const chain = [check]
-  for (let c = check; c.amendsId && byId.has(c.amendsId); ) {
-    c = byId.get(c.amendsId)!
-    chain.unshift(c)
-  }
-  return chain
-}
-
-/** Checks worth listing: every check except those replaced by a signed-off amendment. */
-export function currentChecks(all: SafetyCheck[]): SafetyCheck[] {
-  const superseded = new Set(all.filter((c) => c.completedAt && c.amendsId).map((c) => c.amendsId))
-  return all.filter((c) => !superseded.has(c.id))
-}

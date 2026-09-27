@@ -1,10 +1,66 @@
 import { useEffect, useState } from 'react'
 import { formatDenomination, formatMoney } from '../../domain/money'
-import { DENOMINATIONS, floatTotal, STATION_IDS, STATIONS, type TicketSettings } from '../../domain/tickets'
+import { DENOMINATIONS, floatTotal, STATION_IDS, STATIONS, type TicketSettings, type TicketType } from '../../domain/tickets'
 import { newId } from '../../lib/ids'
 import { useRepository } from '../../storage/hooks'
 import { ErrorNotice, Field } from '../../ui/components'
 import { MoneyInput, WholeInput } from '../../ui/inputs'
+
+function TicketTypeList({ types, onChange }: { types: TicketType[]; onChange: (types: TicketType[]) => void }) {
+  const setType = (i: number, patch: Partial<TicketType>) => onChange(types.map((t, j) => (j === i ? { ...t, ...patch } : t)))
+  return (
+    <>
+      {types.map((t, i) => (
+        <div key={t.id} className="card form">
+          <div className="form-grid">
+            <Field label="Name">
+              <input type="text" value={t.name} onChange={(e) => setType(i, { name: e.target.value })} />
+            </Field>
+            <Field label="Price">
+              <MoneyInput value={t.priceCents} onChange={(v) => setType(i, { priceCents: v ?? 0 })} />
+            </Field>
+            {STATION_IDS.map((station) => (
+              <Field key={station} label={`Colour at ${STATIONS[station].name}`}>
+                <input type="text" value={t.colours[station]} onChange={(e) => setType(i, { colours: { ...t.colours, [station]: e.target.value } })} />
+              </Field>
+            ))}
+          </div>
+          <Field label="Description">
+            <input type="text" value={t.note} onChange={(e) => setType(i, { note: e.target.value })} />
+          </Field>
+          <div className="actions">
+            <button
+              type="button"
+              className="btn icon"
+              aria-label={`Move ${t.name} up`}
+              disabled={i === 0}
+              onClick={() => {
+                const next = [...types]
+                ;[next[i - 1], next[i]] = [next[i], next[i - 1]]
+                onChange(next)
+              }}
+            >
+              ↑
+            </button>
+            <span className="spacer" />
+            <button type="button" className="btn danger" onClick={() => onChange(types.filter((_, j) => j !== i))}>
+              Remove ticket type
+            </button>
+          </div>
+        </div>
+      ))}
+      <div>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => onChange([...types, { id: newId('ticket'), name: '', priceCents: 0, note: '', colours: { victoria: '', playground: '' } }])}
+        >
+          + Add ticket type
+        </button>
+      </div>
+    </>
+  )
+}
 
 export function TicketSettingsPage() {
   const repo = useRepository()
@@ -24,11 +80,9 @@ export function TicketSettingsPage() {
 
   const changed = JSON.stringify(settings) !== JSON.stringify(saved)
   const problems = [
-    ...settings.ticketTypes.filter((t) => !t.name.trim()).map(() => 'Every ticket type needs a name.'),
+    ...[...settings.ticketTypes, ...settings.eventTicketTypes].filter((t) => !t.name.trim()).map(() => 'Every ticket type needs a name.'),
     ...(new Set(settings.float.map((f) => f.denominationCents)).size < settings.float.length ? ['Each denomination can only be in the float once.'] : []),
   ]
-  const setType = (i: number, patch: Partial<TicketSettings['ticketTypes'][number]>) =>
-    setSettings({ ...settings, ticketTypes: settings.ticketTypes.map((t, j) => (j === i ? { ...t, ...patch } : t)) })
   const setFloat = (i: number, patch: Partial<TicketSettings['float'][number]>) =>
     setSettings({ ...settings, float: settings.float.map((f, j) => (j === i ? { ...f, ...patch } : f)) })
 
@@ -51,63 +105,13 @@ export function TicketSettingsPage() {
 
       <section className="form">
         <h2>Ticket types</h2>
-        {settings.ticketTypes.map((t, i) => (
-          <div key={t.id} className="card form">
-            <div className="form-grid">
-              <Field label="Name">
-                <input type="text" value={t.name} onChange={(e) => setType(i, { name: e.target.value })} />
-              </Field>
-              <Field label="Price">
-                <MoneyInput value={t.priceCents} onChange={(v) => setType(i, { priceCents: v ?? 0 })} />
-              </Field>
-              {STATION_IDS.map((station) => (
-                <Field key={station} label={`Colour at ${STATIONS[station].name}`}>
-                  <input type="text" value={t.colours[station]} onChange={(e) => setType(i, { colours: { ...t.colours, [station]: e.target.value } })} />
-                </Field>
-              ))}
-            </div>
-            <Field label="Description">
-              <input type="text" value={t.note} onChange={(e) => setType(i, { note: e.target.value })} />
-            </Field>
-            <div className="actions">
-              <button
-                type="button"
-                className="btn icon"
-                aria-label={`Move ${t.name} up`}
-                disabled={i === 0}
-                onClick={() => {
-                  const types = [...settings.ticketTypes]
-                  ;[types[i - 1], types[i]] = [types[i], types[i - 1]]
-                  setSettings({ ...settings, ticketTypes: types })
-                }}
-              >
-                ↑
-              </button>
-              <span className="spacer" />
-              <button
-                type="button"
-                className="btn danger"
-                onClick={() => setSettings({ ...settings, ticketTypes: settings.ticketTypes.filter((_, j) => j !== i) })}
-              >
-                Remove ticket type
-              </button>
-            </div>
-          </div>
-        ))}
-        <div>
-          <button
-            type="button"
-            className="btn"
-            onClick={() =>
-              setSettings({
-                ...settings,
-                ticketTypes: [...settings.ticketTypes, { id: newId('ticket'), name: '', priceCents: 0, note: '', colours: { victoria: '', playground: '' } }],
-              })
-            }
-          >
-            + Add ticket type
-          </button>
-        </div>
+        <TicketTypeList types={settings.ticketTypes} onChange={(ticketTypes) => setSettings({ ...settings, ticketTypes })} />
+      </section>
+
+      <section className="form">
+        <h2>Special event tickets</h2>
+        <p className="meta">Used instead of the normal tickets on a special event sheet.</p>
+        <TicketTypeList types={settings.eventTicketTypes} onChange={(eventTicketTypes) => setSettings({ ...settings, eventTicketTypes })} />
       </section>
 
       <section className="form">

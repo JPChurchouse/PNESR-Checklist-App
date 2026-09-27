@@ -1,8 +1,7 @@
 import type { CheckResult, ChecklistGroup } from '../../domain/safetyCheck'
 import type { Photo as PhotoValue, Specialty } from '../../domain/types'
+import { formatTime } from '../../lib/dates'
 import { Photo, SpecialtyBadge } from '../../ui/components'
-
-const time = (iso: string) => new Date(iso).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
 
 /** One vehicle's (or the track's) checks. Each is ticked once it has been checked and is OK. */
 export function CheckGroupCard({
@@ -58,7 +57,7 @@ export function CheckGroupCard({
                   <span>{item.label}</span>
                   {item.help && <span className="meta">{item.help}</span>}
                 </span>
-                {result && <span className="meta check-time">{time(result.checkedAt)}</span>}
+                {result && <span className="meta check-time">{formatTime(result.checkedAt)}</span>}
               </button>
             </li>
           )

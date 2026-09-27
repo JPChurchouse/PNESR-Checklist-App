@@ -1,6 +1,8 @@
 import { jsPDF } from 'jspdf'
 
-export { formatDate, formatDateTime } from '../lib/dates'
+import { formatDateTime } from '../lib/dates'
+
+export { formatDate, formatDateTime, formatTime } from '../lib/dates'
 
 export const ORG_NAME = 'Palmerston North Esplanade Scenic Railway'
 
@@ -21,7 +23,7 @@ export const MARGIN = 14
 // The built-in PDF fonts only cover the Windows-1252 character set. Anything else (e.g. macrons,
 // the − sign) is swapped for the nearest character so it never comes out garbled.
 const WIN_ANSI_EXTRAS = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ'
-const REPLACEMENTS: Record<string, string> = { '−': '-', '✓': 'Y', '✕': 'X', '≠': '!=', ' ': ' ', ' ': ' ' }
+const REPLACEMENTS: Record<string, string> = { '−': '-', '→': '->', '✓': 'Y', '✕': 'X', '≠': '!=', ' ': ' ', ' ': ' ' }
 
 export function pdfSafe(text: string): string {
   let out = ''
@@ -45,7 +47,8 @@ export function createDoc(compress: boolean): jsPDF {
   const clean = (t: unknown): unknown => (typeof t === 'string' ? pdfSafe(t) : Array.isArray(t) ? t.map(clean) : t)
   doc.text = ((t: string | string[], ...rest: Parameters<jsPDF['text']> extends [unknown, ...infer R] ? R : never) =>
     text(clean(t) as string | string[], ...rest)) as jsPDF['text']
-  doc.splitTextToSize = ((t: string, ...rest: [number, object?]) => splitTextToSize(pdfSafe(t), ...rest)) as jsPDF['splitTextToSize']
+  // autotable passes a list of lines here, not just a single string.
+  doc.splitTextToSize = ((t: string | string[], ...rest: [number, object?]) => splitTextToSize(clean(t) as string, ...rest)) as jsPDF['splitTextToSize']
   return doc
 }
 
@@ -109,6 +112,27 @@ export function drawParagraph(doc: jsPDF, y: number, text: string) {
   y = ensureSpace(doc, y + 3, lines.length * 5)
   doc.text(lines, MARGIN, y + 2)
   return y + lines.length * 5 + 8
+}
+
+/** Shift manager's name, sign-off time and signature, at the end of a document. */
+export function drawSignOff(doc: jsPDF, y: number, managerName: string, completedAt: string | null, signature: string | null) {
+  y = drawSectionTitle(doc, ensureSpace(doc, y, 55), 'Sign-off')
+  y = drawFacts(doc, y + 5, [
+    ['Shift manager', managerName || '—'],
+    ['Signed off', completedAt ? formatDateTime(completedAt) : 'NOT SIGNED OFF'],
+  ])
+  doc.setFont('helvetica', 'bold')
+  doc.text('Signature:', MARGIN, y)
+  const x = MARGIN + 38
+  const top = y - 3
+  const h = 25
+  if (signature) {
+    const props = doc.getImageProperties(signature)
+    doc.addImage(signature, 'PNG', x, top, Math.min(90, (props.width / props.height) * h), h, undefined, 'FAST')
+  }
+  doc.setDrawColor(...COLOURS.muted)
+  doc.line(x, top + h + 1, x + 90, top + h + 1)
+  return top + h + 8
 }
 
 /** A coloured banner stating the overall outcome, so it can't be missed. */

@@ -1,7 +1,20 @@
 import type { jsPDF } from 'jspdf'
 import { autoTable, type CellHookData } from 'jspdf-autotable'
 import { formatDenomination, formatMoney } from '../domain/money'
-import { balanceText, checkFloat, DENOMINATIONS, reconcile, resolveEftpos, STATIONS, type TicketSheet } from '../domain/tickets'
+import {
+  balanceText,
+  checkFloat,
+  DENOMINATIONS,
+  describeSheetChanges,
+  floatItemLabel,
+  floatItemTotal,
+  reconcile,
+  resolveEftpos,
+  sheetTitle,
+  STATIONS,
+  type FloatCheckEntry,
+  type TicketSheet,
+} from '../domain/tickets'
 // Only characters in the built-in PDF fonts (WinAnsi) render: use '-' not '−', and no ticks or crosses.
 import {
   COLOURS,
@@ -12,6 +25,7 @@ import {
   drawOutcome,
   drawParagraph,
   drawSectionTitle,
+  drawSignOff,
   ensureSpace,
   formatDate,
   formatDateTime,
@@ -22,32 +36,54 @@ import {
 
 const bold = { fontStyle: 'bold' as const }
 const right = { halign: 'right' as const }
+const NOT_CONFIRMED = 'NOT CONFIRMED'
 
-/** Bold red for the body cells listed in `failing`, as "row:column". */
-const highlight = (failing: Set<string>) => (data: CellHookData) => {
-  if (data.section === 'body' && failing.has(`${data.row.index}:${data.column.index}`)) {
+/** Bold red for any body cell reading "NOT CONFIRMED" or "ISSUE". */
+function highlightProblems(data: CellHookData) {
+  if (data.section === 'body' && (data.cell.raw === NOT_CONFIRMED || data.cell.raw === 'ISSUE')) {
     data.cell.styles.textColor = [...COLOURS.fail]
     data.cell.styles.fontStyle = 'bold'
   }
 }
 
 /**
+ * @param chain every revision up to and including `sheet`, oldest first (just `[sheet]` if never corrected)
  * @param compress false keeps the text readable in the raw bytes, for tests
  */
-export function buildTicketSheetPdf(sheet: TicketSheet, { compress = true } = {}): jsPDF {
+export function buildTicketSheetPdf(sheet: TicketSheet, chain: TicketSheet[] = [sheet], { compress = true } = {}): jsPDF {
   const doc = createDoc(compress)
   const r = reconcile(sheet)
   const eftpos = resolveEftpos(sheet.eftpos)
-  const station = STATIONS[sheet.station].name
 
-  let y = drawHeader(doc, `Ticket Sales Sheet: ${station}`)
-  y = drawFacts(doc, y, [
-    ['Station', station],
-    ['Date', formatDate(sheet.date)],
-    ['Cashier', sheet.cashier || '—'],
-    ['Completed', sheet.completedAt ? formatDateTime(sheet.completedAt) : 'NOT COMPLETED'],
-  ])
+  let y = drawHeader(doc, sheet.kind === 'event' ? 'Special Event Ticket Sheet' : 'Ticket Sales Sheet')
+  const facts: [string, string][] = [['Station', STATIONS[sheet.station].name]]
+  if (sheet.kind === 'event') facts.push(['Event', sheet.eventName || '—'])
+  facts.push(['Date', formatDate(sheet.date)])
+  if (sheet.revision > 1) facts.push(['Revision', `${sheet.revision} (corrected)`])
+  facts.push(
+    ['Cashier(s)', sheet.cashiers || '—'],
+    ['Shift started', sheet.startSavedAt ? formatDateTime(sheet.startSavedAt) : '—'],
+    ['Signed off', sheet.completedAt ? formatDateTime(sheet.completedAt) : 'NOT SIGNED OFF'],
+  )
+  y = drawFacts(doc, y, facts)
   y = drawOutcome(doc, y + 2, r.balance === 'balanced', balanceText(r))
+
+  if (chain.length > 1) {
+    y = drawSectionTitle(doc, y, 'Revision history')
+    autoTable(doc, {
+      ...tableTheme,
+      startY: y,
+      head: [['Rev', 'Signed off', 'Manager', 'Reason and changes']],
+      body: chain.map((rev, i) => [
+        String(rev.revision),
+        rev.completedAt ? formatDateTime(rev.completedAt) : 'Not signed off',
+        rev.managerName,
+        i === 0 ? 'Original sheet' : [rev.amendmentReason, ...describeSheetChanges(chain[i - 1], rev)].filter(Boolean).join('\n'),
+      ]),
+      columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 34 }, 2: { cellWidth: 34 } },
+    })
+    y = tableEnd(doc) + 9
+  }
 
   // Tickets
   y = drawSectionTitle(doc, y, 'Tickets sold')
@@ -95,35 +131,34 @@ export function buildTicketSheetPdf(sheet: TicketSheet, { compress = true } = {}
   y = tableEnd(doc) + 9
 
   // Float
-  const before = checkFloat(sheet.float, sheet.floatStart)
-  const after = checkFloat(sheet.float, sheet.floatEnd)
   y = drawSectionTitle(doc, y, 'Float')
-  const floatFailing = new Set<string>()
-  const floatRows = before.rows.map((row, i) => {
-    const a = after.rows[i]
-    if (row.differenceCents) floatFailing.add(`${i}:2`)
-    if (a.differenceCents) floatFailing.add(`${i}:3`)
-    return [formatDenomination(row.denominationCents), String(row.expected), row.counted ?? '—', a.counted ?? '—']
-  })
-  const status = (c: typeof before) => (!c.complete ? 'Not counted' : c.ok ? 'Correct' : 'ISSUE')
-  const statusRow = floatRows.length + 1 // after the Total row
-  if (!before.ok) floatFailing.add(`${statusRow}:2`)
-  if (!after.ok) floatFailing.add(`${statusRow}:3`)
+  const ticked = (entry: FloatCheckEntry, cents: number) => (entry.ticks[cents] ? 'Correct' : NOT_CONFIRMED)
+  const status = (entry: FloatCheckEntry) => {
+    const s = checkFloat(sheet.float, entry).status
+    return s === 'ok' ? 'Correct' : s === 'issue' ? 'ISSUE' : 'Not checked'
+  }
   autoTable(doc, {
     ...tableTheme,
     startY: y,
-    head: [['Note / coin', 'Expected', 'Before shift', 'After reset']],
+    head: [['Float', 'Amount', 'Before shift', 'After reset']],
     body: [
-      ...floatRows,
-      [{ content: 'Total', styles: bold }, formatMoney(before.expectedTotal), formatMoney(before.countedTotal), formatMoney(after.countedTotal)],
-      [{ content: 'Status', styles: bold }, '', status(before), status(after)],
+      ...sheet.float.map((f) => [floatItemLabel(f), formatMoney(floatItemTotal(f)), ticked(sheet.floatStart, f.denominationCents), ticked(sheet.floatEnd, f.denominationCents)]),
+      [
+        { content: 'Float total', styles: bold },
+        { content: formatMoney(checkFloat(sheet.float, sheet.floatStart).total), styles: { ...bold, ...right } },
+        status(sheet.floatStart),
+        status(sheet.floatEnd),
+      ],
     ],
-    columnStyles: { 1: right, 2: right, 3: right },
-    didParseCell: highlight(floatFailing),
+    columnStyles: { 1: right },
+    didParseCell: highlightProblems,
   })
   y = tableEnd(doc) + 4
-  for (const [label, c] of [['Before shift', before], ['After reset', after]] as const)
-    if (c.issues.length) y = drawParagraph(doc, y, `${label}: ${c.issues.join('; ')}`) - 4
+  for (const [label, entry] of [
+    ['Float issue before the shift', sheet.floatStart],
+    ['Float issue after the reset', sheet.floatEnd],
+  ] as const)
+    if (entry.note.trim()) y = drawParagraph(doc, y, `${label}: ${entry.note.trim()}`) - 4
   y += 5
 
   // Cash takings
@@ -163,24 +198,28 @@ export function buildTicketSheetPdf(sheet: TicketSheet, { compress = true } = {}
   })
   y = tableEnd(doc) + 9
 
+  y = drawSectionTitle(doc, y, 'Staff on shift')
+  y = drawParagraph(doc, y, sheet.staff.trim() || '—')
+
   if (sheet.notes.trim()) {
     y = drawSectionTitle(doc, y, 'Notes')
     y = drawParagraph(doc, y, sheet.notes.trim())
   }
 
+  y = drawSignOff(doc, y, sheet.managerName, sheet.completedAt, sheet.signature)
+
   if (sheet.eftposReceipt) {
     const props = doc.getImageProperties(sheet.eftposReceipt)
-    const maxW = 80
-    const maxH = 120
-    const scale = Math.min(maxW / props.width, maxH / props.height)
+    const scale = Math.min(80 / props.width, 120 / props.height)
     const w = props.width * scale
     const h = props.height * scale
     y = drawSectionTitle(doc, ensureSpace(doc, y, h + 14), 'EFTPOS receipt')
     doc.addImage(sheet.eftposReceipt, props.fileType, MARGIN, y + 3, w, h, undefined, 'FAST')
   }
 
-  drawFooters(doc, `${station} ticket sheet ${sheet.date}`)
+  drawFooters(doc, `${sheetTitle(sheet)} ${sheet.date}${sheet.revision > 1 ? ` rev ${sheet.revision}` : ''}`)
   return doc
 }
 
-export const ticketSheetFilename = (sheet: TicketSheet) => `tickets-${sheet.station}-${sheet.date}.pdf`
+export const ticketSheetFilename = (sheet: TicketSheet) =>
+  `tickets-${sheet.station}${sheet.kind === 'event' ? '-event' : ''}-${sheet.date}${sheet.revision > 1 ? `-rev${sheet.revision}` : ''}.pdf`

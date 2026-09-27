@@ -11,17 +11,16 @@ import {
   drawOutcome,
   drawParagraph,
   drawSectionTitle,
-  ensureSpace,
+  drawSignOff,
   formatDate,
   formatDateTime,
-  MARGIN,
+  formatTime,
   tableEnd,
   tableTheme,
 } from './common'
 
 const NOT_CHECKED = 'NOT CHECKED'
 
-const time = (iso: string) => new Date(iso).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
 
 /** Colours the "Checked" column (at `column`): green tick times, bold red when not checked. */
 const styleChecked = (column: number) => (data: CellHookData) => {
@@ -35,7 +34,7 @@ const styleChecked = (column: number) => (data: CellHookData) => {
 // The built-in PDF fonts have no tick glyph, so checked items show the time only.
 const checkedCell = (check: SafetyCheck, key: string) => {
   const r = check.results[key]
-  return r ? time(r.checkedAt) : NOT_CHECKED
+  return r ? formatTime(r.checkedAt) : NOT_CHECKED
 }
 
 function vehicleRows(check: SafetyCheck, groups: ChecklistGroup[]): RowInput[] {
@@ -150,23 +149,7 @@ export function buildSafetyCheckPdf(check: SafetyCheck, chain: SafetyCheck[] = [
     y = drawParagraph(doc, y, check.notes.trim())
   }
 
-  y = drawSectionTitle(doc, ensureSpace(doc, y, 55), 'Sign-off')
-  y = drawFacts(doc, y + 5, [
-    ['Shift manager', check.managerName || '—'],
-    ['Signed off', check.completedAt ? formatDateTime(check.completedAt) : 'NOT SIGNED OFF'],
-  ])
-  doc.setFont('helvetica', 'bold')
-  doc.text('Signature:', MARGIN, y)
-  const sigX = MARGIN + 38
-  const sigTop = y - 3
-  const sigH = 25
-  if (check.signature) {
-    const props = doc.getImageProperties(check.signature)
-    const w = Math.min(90, (props.width / props.height) * sigH)
-    doc.addImage(check.signature, 'PNG', sigX, sigTop, w, sigH, undefined, 'FAST')
-  }
-  doc.setDrawColor(...COLOURS.muted)
-  doc.line(sigX, sigTop + sigH + 1, sigX + 90, sigTop + sigH + 1)
+  drawSignOff(doc, y, check.managerName, check.completedAt, check.signature)
 
   drawFooters(doc, `Safety check ${check.date}${check.revision > 1 ? ` rev ${check.revision}` : ''}`)
   return doc

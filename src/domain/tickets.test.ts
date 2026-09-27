@@ -1,30 +1,44 @@
 import { describe, expect, it } from 'vitest'
 import { formatDenomination, formatMoney, parseMoney, parseWhole } from './money'
+import { currentRecords, revisionChainOf } from './revisions'
 import {
+  amendTicketSheet,
   balanceText,
   checkFloat,
   completionProblems,
   countTotal,
   DEFAULT_TICKET_SETTINGS,
+  describeSheetChanges,
+  floatItemLabel,
   floatTotal,
   newTicketSheet,
   reconcile,
   resolveEftpos,
+  sheetTitle,
   startProblems,
   ticketLineResult,
-  type Counts,
+  type FloatCheckEntry,
   type TicketSheet,
 } from './tickets'
 
-const FULL_FLOAT: Counts = { 100: 30, 200: 40, 500: 12, 1000: 8 }
+const ALL_TICKED: FloatCheckEntry = { ticks: { 100: true, 200: true, 500: true, 1000: true }, note: '' }
+const DAY = new Date(2026, 8, 27)
 
 function sheet(patch: Partial<TicketSheet> = {}): TicketSheet {
-  return { ...newTicketSheet('s', 'victoria', DEFAULT_TICKET_SETTINGS, new Date(2026, 8, 27)), ...patch }
+  return { ...newTicketSheet('s', 'victoria', DEFAULT_TICKET_SETTINGS, 'regular', DAY), ...patch }
 }
 
 /** A finished Victoria shift: 20 one-way, 30 return, 5 supporter, 2 concession = $40 + $90 + $0 + $40 = $170. */
 function finishedShift(): TicketSheet {
-  const s = sheet({ cashier: 'Robin', floatStart: FULL_FLOAT, floatEnd: FULL_FLOAT })
+  const s = sheet({
+    cashiers: 'Robin',
+    staff: 'Sam (manager)\nAlex (driver)',
+    floatStart: ALL_TICKED,
+    floatEnd: ALL_TICKED,
+    startSavedAt: new Date(2026, 8, 27, 9).toISOString(),
+    managerName: 'Sam',
+    signature: 'data:image/png;base64,x',
+  })
   const serials: Record<string, [number, number]> = {
     'one-way': [123456, 123476],
     return: [200100, 200130],
@@ -85,27 +99,28 @@ describe('ticketLineResult', () => {
 })
 
 describe('float', () => {
+  const float = DEFAULT_TICKET_SETTINGS.float
+
   it('matches the $250 float from the spec', () => {
-    expect(floatTotal(DEFAULT_TICKET_SETTINGS.float)).toBe(25000)
+    expect(floatTotal(float)).toBe(25000)
   })
 
-  it('is good to go when every denomination matches', () => {
-    const check = checkFloat(DEFAULT_TICKET_SETTINGS.float, FULL_FLOAT)
-    expect(check).toMatchObject({ complete: true, ok: true, issues: [], countedTotal: 25000 })
+  it('describes each part the way it is checked', () => {
+    expect(float.map(floatItemLabel)).toEqual(['$1 coins: 3 bags × 10', '$2 coins: 4 bags × 10', '$5 notes: 1 bag × 12', '$10 notes: 1 bag × 8'])
   })
 
-  it('names each denomination that is off, and by how much', () => {
-    const check = checkFloat(DEFAULT_TICKET_SETTINGS.float, { ...FULL_FLOAT, 200: 38, 1000: 9 })
-    expect(check.ok).toBe(false)
-    expect(check.issues).toEqual(['$2: 38 counted, 40 expected ($4.00 short)', '$10: 9 counted, 8 expected ($10.00 over)'])
+  it('is good to go once every part is ticked', () => {
+    expect(checkFloat(float, ALL_TICKED)).toMatchObject({ status: 'ok', unticked: [] })
   })
 
-  it('is incomplete until every denomination is counted', () => {
-    expect(checkFloat(DEFAULT_TICKET_SETTINGS.float, { 100: 30 })).toMatchObject({ complete: false, ok: false })
+  it('is unfinished while something is unticked and unexplained', () => {
+    expect(checkFloat(float, { ticks: { 100: true }, note: '' }).status).toBe('pending')
   })
 
-  it('flags money that should not be in the float', () => {
-    expect(checkFloat(DEFAULT_TICKET_SETTINGS.float, { ...FULL_FLOAT, 2000: 1 }).issues).toEqual(['$20: 1 counted, none expected in the float'])
+  it('records an issue when something is unticked with a note', () => {
+    const check = checkFloat(float, { ticks: { ...ALL_TICKED.ticks, 200: false }, note: 'One $2 bag short by 2 coins' })
+    expect(check.status).toBe('issue')
+    expect(check.unticked.map((f) => f.denominationCents)).toEqual([200])
   })
 })
 
@@ -169,12 +184,13 @@ describe('reconcile', () => {
   })
 })
 
-describe('completion', () => {
-  it('lists what is needed before the shift', () => {
+describe('start of shift and completion', () => {
+  it('lists what is needed before saving the start of the shift', () => {
     expect(startProblems(sheet())).toEqual([
-      "Enter the cashier's name.",
+      'Enter the cashier name(s).',
+      'List the staff on shift.',
       'Enter the start number for each ticket roll in use.',
-      'Count the float before the shift.',
+      "Tick each part of the float before the shift, or note what's wrong with it.",
     ])
   })
 
@@ -185,15 +201,66 @@ describe('completion', () => {
     expect(completionProblems(s)).toEqual([])
   })
 
-  it('needs end numbers, the float reset, and consistent EFTPOS figures', () => {
+  it('needs the start saved, end numbers, the float reset, EFTPOS figures and a signature', () => {
     const s = finishedShift()
+    s.startSavedAt = null
     s.tickets[0] = { ...s.tickets[0], endSerial: null }
-    s.floatEnd = {}
+    s.floatEnd = { ticks: {}, note: '' }
     s.eftpos = { takings: 100, totalCharged: null, surcharge: null }
+    s.signature = null
     expect(completionProblems(s)).toEqual([
+      'Save the start of the shift first.',
       'One-way: enter the end number.',
-      'Count the float after resetting it.',
+      "Tick each part of the float after resetting it, or note what's wrong with it.",
       'Enter two of the three EFTPOS amounts.',
+      'The shift manager needs to sign.',
     ])
+  })
+
+  it('accepts a float issue once it is explained', () => {
+    const s = finishedShift()
+    s.floatEnd = { ticks: { ...ALL_TICKED.ticks, 200: false }, note: '$2 bag short 2 coins, topped up from takings' }
+    expect(completionProblems(s)).toEqual([])
+  })
+})
+
+describe('special event sheets', () => {
+  const event = newTicketSheet('e', 'playground', DEFAULT_TICKET_SETTINGS, 'event', DAY)
+
+  it('only has the event ticket, purple at $5', () => {
+    expect(event.tickets).toEqual([{ typeId: 'event', name: 'Event', priceCents: 500, colour: 'Purple', startSerial: null, endSerial: null }])
+  })
+
+  it('needs the event named', () => {
+    expect(startProblems(event)[0]).toBe('Name the event.')
+    expect(sheetTitle({ ...event, eventName: 'Halloween run' })).toBe('Playground Station special event: Halloween run')
+  })
+
+  it('reconciles the same way', () => {
+    const done = { ...event, tickets: [{ ...event.tickets[0], startSerial: 100, endSerial: 140 }], cash: { 2000: 10 } }
+    expect(reconcile(done)).toMatchObject({ ticketsSold: 40, ticketValue: 20000, balance: 'balanced' })
+  })
+})
+
+describe('corrections', () => {
+  const original = { ...finishedShift(), id: 'rev1', completedAt: new Date(2026, 8, 27, 16).toISOString() }
+
+  it('copies everything, links to the original and needs a new signature and reason', () => {
+    const rev2 = amendTicketSheet(original, 'rev2')
+    expect(rev2).toMatchObject({ revision: 2, amendsId: 'rev1', completedAt: null, signature: null, managerName: 'Sam' })
+    expect(completionProblems({ ...rev2, signature: 'x' })).toEqual(['Give a reason for the correction.'])
+  })
+
+  it('lists what was corrected', () => {
+    const rev2 = amendTicketSheet(original, 'rev2')
+    rev2.tickets[1] = { ...rev2.tickets[1], endSerial: 200131 }
+    rev2.cash = { ...rev2.cash, 500: 5 }
+    expect(describeSheetChanges(original, rev2)).toEqual(['Return end number: 200130 → 200131', 'Cash takings: $70.00 → $75.00'])
+  })
+
+  it('lists only the latest signed-off revision', () => {
+    const rev2 = { ...amendTicketSheet(original, 'rev2'), completedAt: new Date(2026, 8, 28).toISOString() }
+    expect(currentRecords([original, rev2]).map((s) => s.id)).toEqual(['rev2'])
+    expect(revisionChainOf(rev2, [rev2, original]).map((s) => s.id)).toEqual(['rev1', 'rev2'])
   })
 })

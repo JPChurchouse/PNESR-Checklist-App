@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { checkProgress, currentChecks, newSafetyCheck, type SafetyCheck } from '../../domain/safetyCheck'
+import { currentRecords } from '../../domain/revisions'
+import { checkProgress, newSafetyCheck, type SafetyCheck } from '../../domain/safetyCheck'
 import { newId } from '../../lib/ids'
 import { formatDate, localDate } from '../../lib/dates'
 import { useRepository } from '../../storage/hooks'
@@ -50,7 +51,7 @@ export function SafetyChecksPage() {
       <ErrorNotice error={error} />
       {checks?.length === 0 && <p className="meta">No safety checks yet.</p>}
       <ul className="set-list">
-        {checks && currentChecks(checks).map((check) => {
+        {checks && currentRecords(checks).map((check) => {
           const p = checkProgress(check)
           return (
             <li key={check.id}>

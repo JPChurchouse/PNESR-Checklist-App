@@ -40,7 +40,7 @@ describe('buildSafetyCheckPdf', () => {
 
     const text = new TextDecoder('latin1').decode(bytes)
     expect(text.startsWith('%PDF-')).toBe(true)
-    for (const expected of ['Pre-operation Safety Check', 'Sam Example', 'Ready to operate: all 45 checks completed', '9:45 am', 'Crossing 2 alarm'])
+    for (const expected of ['Pre-operation Safety Check', 'Sam Example', 'Ready to operate: all 45 checks completed', '09:45', 'Crossing 2 alarm'])
       expect(text).toContain(expected)
     expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(2)
   })

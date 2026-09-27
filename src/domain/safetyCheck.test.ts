@@ -3,12 +3,10 @@ import {
   amendSafetyCheck,
   buildChecklist,
   checkProgress,
-  currentChecks,
   describeTrainChanges,
   newSafetyCheck,
   pruneResults,
   resultKey,
-  revisionChain,
   signOffState,
   snapshotCarriage,
   snapshotLoco,
@@ -16,6 +14,7 @@ import {
   type SafetyCheck,
   type TrainCheck,
 } from './safetyCheck'
+import { currentRecords as currentChecks, revisionChainOf as revisionChain } from './revisions'
 import { seedFleet } from './seed'
 
 const fleet = seedFleet()

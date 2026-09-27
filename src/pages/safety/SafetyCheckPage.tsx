@@ -7,13 +7,13 @@ import {
   describeTrainChanges,
   MAX_TRAINS,
   pruneResults,
-  revisionChain,
   signOffState,
   trainProblems,
   type Outcome,
   type SafetyCheck,
   type TrainCheck,
 } from '../../domain/safetyCheck'
+import { revisionChainOf as revisionChain } from '../../domain/revisions'
 import type { Fleet } from '../../domain/types'
 import { formatDate, formatDateTime } from '../../lib/dates'
 import { newId } from '../../lib/ids'

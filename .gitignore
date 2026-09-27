@@ -29,3 +29,6 @@ fleet-images/
 brand-images/
 public/fleet/
 public/brand/
+
+# Staff data exported from the club spreadsheet: personal details, never commit.
+staff-list*.csv

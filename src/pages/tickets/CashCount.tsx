@@ -1,9 +1,9 @@
 import { formatDenomination, formatMoney } from '../../domain/money'
-import { checkFloat, countTotal, DENOMINATIONS, type Counts, type FloatItem } from '../../domain/tickets'
+import { checkFloat, countTotal, DENOMINATIONS, floatItemLabel, floatItemTotal, type Counts, type FloatCheckEntry, type FloatItem } from '../../domain/tickets'
 import { WholeInput } from '../../ui/inputs'
 
 /** Count of each NZ note and coin, with the running total. */
-export function CashCount({ counts, onChange, readOnly }: { counts: Counts; onChange: (counts: Counts) => void; readOnly: boolean }) {
+export function CashCount({ counts, onChange, readOnly }: { counts: Counts; onChange: (cents: number, count: number | null) => void; readOnly: boolean }) {
   const notesFirst = [...DENOMINATIONS].reverse()
   return (
     <table className="count-table">
@@ -25,7 +25,7 @@ export function CashCount({ counts, onChange, readOnly }: { counts: Counts; onCh
                   value={n}
                   readOnly={readOnly}
                   aria-label={`Number of ${formatDenomination(cents)}`}
-                  onChange={(v) => onChange({ ...counts, [cents]: v })}
+                  onChange={(v) => onChange(cents, v)}
                 />
               </td>
               <td className="num">{n ? formatMoney(n * cents) : ''}</td>
@@ -43,85 +43,69 @@ export function CashCount({ counts, onChange, readOnly }: { counts: Counts; onCh
   )
 }
 
-/** Float count against what the float should hold, with a clear "good to go" or "issue" banner. */
-export function FloatCount({
+/** Float check: tick each denomination once its bags are confirmed, or note what's wrong. */
+export function FloatCheckList({
   float,
-  counts,
-  onChange,
+  entry,
+  onToggle,
+  onNote,
   readOnly,
 }: {
   float: FloatItem[]
-  counts: Counts
-  onChange: (counts: Counts) => void
+  entry: FloatCheckEntry
+  onToggle: (cents: number) => void
+  onNote: (note: string) => void
   readOnly: boolean
 }) {
-  const check = checkFloat(float, counts)
+  const check = checkFloat(float, entry)
   return (
     <div className="float-count">
-      {check.complete ? (
-        check.ok ? (
-          <div className="float-banner ok" role="status">
-            ✓ Float correct: {formatMoney(check.expectedTotal)}. Good to go.
-          </div>
-        ) : (
-          <div className="float-banner issue" role="status">
-            <strong>✕ Float issue</strong>: counted {formatMoney(check.countedTotal)}, expected {formatMoney(check.expectedTotal)}
-            <ul>
-              {check.issues.map((i) => (
-                <li key={i}>{i}</li>
-              ))}
-            </ul>
-          </div>
-        )
-      ) : (
-        <div className="float-banner pending" role="status">
-          Count each denomination. Expected total {formatMoney(check.expectedTotal)}.
+      {check.status === 'ok' && (
+        <div className="float-banner ok" role="status">
+          ✓ Float correct: {formatMoney(check.total)}. Good to go.
         </div>
       )}
-      <table className="count-table">
-        <thead>
-          <tr>
-            <th>Note / coin</th>
-            <th>Expected</th>
-            <th>Counted</th>
-            <th className="num">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {check.rows.map((row) => {
-            const item = float.find((f) => f.denominationCents === row.denominationCents)!
-            const status = row.counted === null ? '' : row.differenceCents === 0 ? 'ok' : 'issue'
-            return (
-              <tr key={row.denominationCents} className={status}>
-                <th scope="row">{formatDenomination(row.denominationCents)}</th>
-                <td>
-                  {row.expected}
-                  <span className="meta bags">
-                    {item.bags} bag{item.bags === 1 ? '' : 's'} × {item.perBag}
-                  </span>
-                </td>
-                <td>
-                  <WholeInput
-                    value={row.counted}
-                    readOnly={readOnly}
-                    aria-label={`Number of ${formatDenomination(row.denominationCents)} in the float`}
-                    onChange={(v) => onChange({ ...counts, [row.denominationCents]: v })}
-                  />
-                </td>
-                <td className="num">
-                  {status === 'ok' && <span className="badge ok">✓</span>}
-                  {status === 'issue' && (
-                    <span className="badge danger">
-                      {row.differenceCents! < 0 ? '−' : '+'}
-                      {formatMoney(Math.abs(row.differenceCents!))}
-                    </span>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      {check.status === 'issue' && (
+        <div className="float-banner issue" role="status">
+          <strong>✕ Float issue</strong>: {check.unticked.map((f) => formatDenomination(f.denominationCents)).join(', ')} not confirmed.
+        </div>
+      )}
+      {check.status === 'pending' && (
+        <div className="float-banner pending" role="status">
+          Tick each part once it's checked. Float total {formatMoney(check.total)}.
+        </div>
+      )}
+      <ul className="check-list card">
+        {float.map((f) => {
+          const ticked = Boolean(entry.ticks[f.denominationCents])
+          return (
+            <li key={f.denominationCents}>
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={ticked}
+                className={`check-item ${ticked ? 'checked' : ''}`}
+                disabled={readOnly}
+                onClick={() => onToggle(f.denominationCents)}
+              >
+                <span className="tick" aria-hidden="true">
+                  {ticked ? '✓' : ''}
+                </span>
+                <span className="check-label">{floatItemLabel(f)}</span>
+                <span className="check-time">{formatMoney(floatItemTotal(f))}</span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      {(check.unticked.length > 0 || entry.note) && (
+        <label className="field">
+          <span>
+            What's wrong with the float? <span className="hint">(needed if anything can't be ticked)</span>
+          </span>
+          <textarea value={entry.note} readOnly={readOnly} rows={2} onChange={(e) => onNote(e.target.value)} />
+        </label>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import Dexie, { liveQuery, type EntityTable } from 'dexie'
 import type { SafetyCheck } from '../domain/safetyCheck'
 import { seedFleet } from '../domain/seed'
-import { DEFAULT_TICKET_SETTINGS, type StationId, type TicketSettings, type TicketSheet } from '../domain/tickets'
+import { withSettingDefaults, type StationId, type TicketSettings, type TicketSheet } from '../domain/tickets'
 import type { Carriage, CarriageSet, Fleet, Livery, Locomotive } from '../domain/types'
 import { StorageRuleError, type Repository } from './repository'
 
@@ -48,6 +48,37 @@ class Db extends Dexie {
       settings: 'id',
       ticketSheets: 'id, [station+startedAt]',
     })
+    // v5: float counts become ticks, cashier becomes cashiers, and sheets gain staff, sign-off,
+    // a saved start of shift, special events and revisions.
+    this.version(5).upgrade((tx) =>
+      tx
+        .table('ticketSheets')
+        .toCollection()
+        .modify((sheet: Record<string, unknown>) => {
+          const float = sheet.float as { denominationCents: number; perBag: number; bags: number }[]
+          const toTicks = (counts: unknown) => {
+            const c = (counts ?? {}) as Record<string, number | null>
+            if ('ticks' in c) return c
+            return {
+              ticks: Object.fromEntries(float.map((f) => [f.denominationCents, c[f.denominationCents] === f.perBag * f.bags])),
+              note: '',
+            }
+          }
+          sheet.floatStart = toTicks(sheet.floatStart)
+          sheet.floatEnd = toTicks(sheet.floatEnd)
+          sheet.cashiers ??= (sheet.cashier as string | undefined) ?? ''
+          delete sheet.cashier
+          sheet.kind ??= 'regular'
+          sheet.eventName ??= ''
+          sheet.staff ??= ''
+          sheet.startSavedAt ??= sheet.completedAt ?? null
+          sheet.managerName ??= ''
+          sheet.signature ??= null
+          sheet.revision ??= 1
+          sheet.amendsId ??= null
+          sheet.amendmentReason ??= ''
+        }),
+    )
     this.on('populate', (tx) => {
       const fleet = seedFleet()
       tx.table('liveries').bulkAdd(fleet.liveries)
@@ -157,7 +188,7 @@ export class DexieRepository implements Repository {
 
   async getTicketSettings() {
     const row = await this.db.settings.get('tickets')
-    return (row?.value as TicketSettings | undefined) ?? structuredClone(DEFAULT_TICKET_SETTINGS)
+    return withSettingDefaults((row?.value as Partial<TicketSettings> | undefined) ?? {})
   }
 
   async saveTicketSettings(settings: TicketSettings) {

@@ -14,6 +14,15 @@ describe('pdfSafe', () => {
     expect(pdfSafe('− ✓ 🚂')).toBe('- Y ?')
   })
 
+  it('keeps line breaks in table cells', async () => {
+    const { autoTable } = await import('jspdf-autotable')
+    const doc = createDoc(false)
+    autoTable(doc, { body: [['First line\nSecond Tūī line']] })
+    const raw = new TextDecoder('latin1').decode(doc.output('arraybuffer'))
+    expect(raw).toContain('(First line) Tj')
+    expect(raw).toContain('(Second Tui line) Tj')
+  })
+
   it('is applied to text drawn on the page', () => {
     const doc = createDoc(false)
     doc.text('Kia ora Tūī', 10, 10)
