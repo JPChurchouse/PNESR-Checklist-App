@@ -51,3 +51,14 @@ npm run images     # re-make the web-sized photos from originals in fleet-images
 (set *Settings → Pages → Source* to *GitHub Actions* once). The built app is static files, so it can
 also be served from any web server, e.g. a Raspberry Pi. Installing and offline use need HTTPS
 (or `localhost`).
+
+## Licence
+
+[Elastic License 2.0](LICENSE) with an extra permission. In short, and not a substitute for the
+[LICENSE](LICENSE) file itself:
+
+- You may use, copy, change and share this software, including for another railway or organisation.
+- An organisation may host its own copy for its own members, staff and volunteers.
+- You may not offer it to others as a hosted or managed service (software as a service).
+- Keep the licence and copyright notices, and say clearly that you've changed it if you have.
+- The railway's name, logo and photos are not included in the licence; use your own.
