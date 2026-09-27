@@ -54,3 +54,33 @@ describe('DexieRepository', () => {
     expect(seen.at(-1)).toBe('Capital')
   })
 })
+
+describe('upgrading older saved data', () => {
+  it('converts pass/fail results from version 2 into ticks', async () => {
+    const { default: Dexie } = await import('dexie')
+    const name = `test-upgrade-${++dbCount}`
+    const old = new Dexie(name)
+    old.version(2).stores({ liveries: 'id', locomotives: 'id', carriages: 'id', sets: 'id', safetyChecks: 'id, startedAt' })
+    await old.table('safetyChecks').add({
+      id: 'old',
+      date: '2026-09-28',
+      startedAt: '2026-09-28T01:00:00.000Z',
+      completedAt: null,
+      trains: [],
+      results: { 'track:radio': { status: 'pass', note: '' }, 'track:run-around': { status: 'fail', note: 'x' } },
+      managerName: '',
+      signature: null,
+      notes: '',
+    })
+    old.close()
+
+    const check = await new DexieRepository(name).getSafetyCheck('old')
+    expect(check).toMatchObject({
+      results: { 'track:radio': { checkedAt: '2026-09-28T01:00:00.000Z' } },
+      outcome: 'operate',
+      revision: 1,
+      amendsId: null,
+    })
+    expect(check!.results['track:run-around']).toBeUndefined()
+  })
+})

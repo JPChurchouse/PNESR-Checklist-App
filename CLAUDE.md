@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run dev`: dev server at http://localhost:5173
 - `npm test`: Vitest, run once. Test files have their own `tsconfig.test.json` (Node types allowed there, not in app code) (`npm run test:watch` to watch; `npx vitest run src/domain/sets.test.ts` for one file, `-t "<name>"` for one test)
 - `npm run typecheck` / `npm run lint` (oxlint) / `npm run build`
-- `PDF_PREVIEW=out.pdf npx vitest run src/pdf`: writes a sample PDF to look at the layout
+- `PDF_PREVIEW=<dir> npx vitest run src/pdf`: writes sample PDFs into `<dir>` to look at the layout
 - `npm run images`: regenerate `public/fleet/*.webp` and `public/brand/*` from the originals in `fleet-images/` and `brand-images/`. Run it after adding or replacing a photo.
 
 The full requirements are in `prompt.md`. Build order: (1) fleet data and admin, done; (2) safety check and PDF, done; (3) ticket sheets, reconciliation and PDF; (4) offline/PWA, history, fleet export/import, deployment.

@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  amendSafetyCheck,
   buildChecklist,
   checkProgress,
+  currentChecks,
+  describeTrainChanges,
   newSafetyCheck,
   pruneResults,
   resultKey,
+  revisionChain,
   signOffState,
   snapshotCarriage,
   snapshotLoco,
@@ -17,19 +21,20 @@ import { seedFleet } from './seed'
 const fleet = seedFleet()
 const car = (code: string) => snapshotCarriage(fleet, fleet.carriages.find((c) => c.code === code)!)
 const loco = (code: string) => snapshotLoco(fleet, fleet.locomotives.find((l) => l.code === code)!)
-const train = (locoCode: string, cars: string): TrainCheck => ({
-  id: `t-${locoCode}`,
+const train = (locoCode: string, cars: string, id = `t-${locoCode}`): TrainCheck => ({
+  id,
   setName: null,
   loco: loco(locoCode),
   carriages: cars.split('').map(car),
 })
+const TICK = { checkedAt: '2026-09-27T20:00:00.000Z' }
 
-function passAll(check: SafetyCheck): SafetyCheck {
-  const results = Object.fromEntries(
-    buildChecklist(check).flatMap((g) => g.rows.map((r) => [r.key, { status: 'pass' as const, note: '' }])),
-  )
+function tickAll(check: SafetyCheck): SafetyCheck {
+  const results = { ...check.results }
+  for (const g of buildChecklist(check)) for (const r of g.rows) results[r.key] ??= TICK
   return { ...check, results }
 }
+const signed = (check: SafetyCheck): SafetyCheck => ({ ...check, managerName: 'Alex', signature: 'data:image/png;base64,x' })
 
 describe('buildChecklist', () => {
   it('adds the right checks for each kind of carriage', () => {
@@ -55,14 +60,9 @@ describe('buildChecklist', () => {
 })
 
 describe('checkProgress', () => {
-  it('counts passes, fails and fails missing a note', () => {
-    const check = { trains: [train('DA', 'CI')], results: {
-      [resultKey('track', 'radio')]: { status: 'pass' as const, note: '' },
-      [resultKey('loco-da', 'horn')]: { status: 'fail' as const, note: '' },
-      [resultKey('loco-da', 'lights')]: { status: 'fail' as const, note: 'Left headlight out, replaced' },
-      [resultKey('car-z', 'doors')]: { status: 'pass' as const, note: '' }, // not in any train: ignored
-    } }
-    expect(checkProgress(check)).toMatchObject({ answered: 3, passed: 1, failed: 2, failedWithoutNote: 1 })
+  it('counts ticks only for vehicles in today’s trains', () => {
+    const results = { [resultKey('track', 'radio')]: TICK, [resultKey('loco-da', 'horn')]: TICK, [resultKey('car-z', 'doors')]: TICK }
+    expect(checkProgress({ trains: [train('DA', 'CI')], results })).toEqual({ total: 15, done: 2 })
   })
 })
 
@@ -76,7 +76,7 @@ describe('trainProblems', () => {
   })
 
   it('catches the same vehicle in two trains', () => {
-    expect(trainProblems({ trains: [train('DA', 'CBI'), train('DA', 'EBH')] })).toEqual([
+    expect(trainProblems({ trains: [train('DA', 'CBI', 't1'), train('DA', 'EBH', 't2')] })).toEqual([
       'DA is in train 1 and train 2.',
       'B is in train 1 and train 2.',
     ])
@@ -94,29 +94,72 @@ describe('signOffState', () => {
     const { canComplete, reasons } = signOffState(base)
     expect(canComplete).toBe(false)
     expect(reasons).toEqual([
-      '15 checks still to do.', // track 3 + loco 3 + driver 3 + guard 6,
+      '15 checks still to do.', // track 3 + loco 3 + driver 3 + guard 6
       "Enter the shift manager's name.",
       'The shift manager needs to sign.',
     ])
   })
 
-  it('allows sign-off once every check is done and signed', () => {
-    const done = { ...passAll(base), managerName: 'Alex', signature: 'data:image/png;base64,x' }
-    expect(signOffState(done)).toEqual({ canComplete: true, reasons: [] })
+  it('allows sign-off once every check is ticked and signed', () => {
+    expect(signOffState(signed(tickAll(base)))).toEqual({ canComplete: true, reasons: [] })
   })
 
-  it('allows a failed check only with a note', () => {
-    const done = { ...passAll(base), managerName: 'Alex', signature: 'data:image/png;base64,x' }
-    done.results[resultKey('car-c', 'extinguisher')] = { status: 'fail', note: '' }
-    expect(signOffState(done).reasons).toEqual(['Add a note to the failed check.'])
-    done.results[resultKey('car-c', 'extinguisher')].note = 'Swapped from spare, now present'
-    expect(signOffState(done).canComplete).toBe(true)
+  it("can record that the railway won't operate without finishing the checks", () => {
+    const cancelled = signed({ ...base, outcome: 'cancelled' as const })
+    expect(signOffState(cancelled).reasons).toEqual(["Explain why the railway can't operate."])
+    expect(signOffState({ ...cancelled, cancelReason: 'Washout near the bridge' }).canComplete).toBe(true)
+  })
+
+  it('needs a reason for an amendment', () => {
+    const amended = signed(tickAll(amendSafetyCheck({ ...signed(tickAll(base)), completedAt: TICK.checkedAt }, 'y')))
+    expect(signOffState({ ...amended, signature: 'x' }).reasons).toEqual(['Give a reason for the amendment.'])
+  })
+})
+
+describe('amendments', () => {
+  const original: SafetyCheck = {
+    ...signed(tickAll({ ...newSafetyCheck('rev1'), trains: [train('DA', 'CBDKMI', 't1'), train('DXR', 'EFGNOH', 't2')] })),
+    completedAt: '2026-09-27T21:00:00.000Z',
+  }
+
+  it('carries ticks over, needs a fresh signature, and links to the original', () => {
+    const rev2 = amendSafetyCheck(original, 'rev2')
+    expect(rev2).toMatchObject({ revision: 2, amendsId: 'rev1', completedAt: null, signature: null, managerName: 'Alex' })
+    expect(rev2.results).toEqual(original.results)
+  })
+
+  it('only the swapped-in loco needs checking', () => {
+    const rev2 = amendSafetyCheck(original, 'rev2')
+    rev2.trains[1] = { ...rev2.trains[1], loco: loco('DG') }
+    const { total, done } = checkProgress(rev2)
+    expect(total - done).toBe(3)
+  })
+
+  it('describes what changed', () => {
+    const rev2 = amendSafetyCheck(original, 'rev2')
+    rev2.trains[1] = { ...rev2.trains[1], loco: loco('DG') }
+    rev2.trains.push(train('DXC', 'JPRSQL', 't3'))
+    expect(describeTrainChanges(original, rev2)).toEqual([
+      'Train 2: locomotive DXR replaced by DG.',
+      'Train 3 added (DXC, J P R S Q L).',
+    ])
+    rev2.trains = [rev2.trains[0]]
+    expect(describeTrainChanges(original, rev2)).toEqual(['A train was removed (DXR, E F G N O H).'])
+  })
+
+  it('follows the chain of revisions and lists only the latest signed-off one', () => {
+    const rev2 = { ...amendSafetyCheck(original, 'rev2'), completedAt: '2026-09-28T01:00:00.000Z' }
+    const rev3 = amendSafetyCheck(rev2, 'rev3')
+    const all = [original, rev2, rev3]
+    expect(revisionChain(rev3, all).map((c) => c.id)).toEqual(['rev1', 'rev2', 'rev3'])
+    // rev3 is still in progress, so rev2 stays listed alongside it.
+    expect(currentChecks(all).map((c) => c.id)).toEqual(['rev2', 'rev3'])
   })
 })
 
 describe('pruneResults', () => {
-  it('drops results for carriages taken out of the train', () => {
-    const check = passAll({ ...newSafetyCheck('x'), trains: [train('DA', 'CBI')] })
+  it('drops ticks for carriages taken out of the train', () => {
+    const check = tickAll({ ...newSafetyCheck('x'), trains: [train('DA', 'CBI')] })
     const swapped = pruneResults({ ...check, trains: [train('DA', 'CDI')] })
     expect(Object.keys(swapped.results).some((k) => k.startsWith('car-b:'))).toBe(false)
     expect(swapped.results[resultKey('car-c', 'doors')]).toBeDefined()

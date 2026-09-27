@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { checkProgress, localDate, newSafetyCheck, type SafetyCheck } from '../../domain/safetyCheck'
+import { checkProgress, currentChecks, localDate, newSafetyCheck, type SafetyCheck } from '../../domain/safetyCheck'
 import { newId } from '../../lib/ids'
 import { formatDate } from '../../lib/dates'
 import { useRepository } from '../../storage/hooks'
@@ -18,7 +18,7 @@ export function SafetyChecksPage() {
   }, [repo])
 
   const today = localDate()
-  const openToday = checks?.find((c) => c.date === today && !c.completedAt)
+  const openToday = checks?.find((c) => c.date === today && !c.completedAt && c.revision === 1)
 
   async function start() {
     setStarting(true)
@@ -50,7 +50,7 @@ export function SafetyChecksPage() {
       <ErrorNotice error={error} />
       {checks?.length === 0 && <p className="meta">No safety checks yet.</p>}
       <ul className="set-list">
-        {checks?.map((check) => {
+        {checks && currentChecks(checks).map((check) => {
           const p = checkProgress(check)
           return (
             <li key={check.id}>
@@ -63,17 +63,20 @@ export function SafetyChecksPage() {
                     {check.managerName && ` · ${check.managerName}`}
                   </div>
                 </div>
-                {check.completedAt ? (
-                  p.failed ? (
-                    <span className="badge danger">{p.failed} failed</span>
+                <span className="actions">
+                  {check.revision > 1 && <span className="badge">Rev {check.revision}</span>}
+                  {check.completedAt ? (
+                    check.outcome === 'cancelled' ? (
+                      <span className="badge danger">Not operating</span>
+                    ) : (
+                      <span className="badge ok">Signed off</span>
+                    )
                   ) : (
-                    <span className="badge ok">Completed</span>
-                  )
-                ) : (
-                  <span className="badge warn">
-                    In progress {p.answered}/{p.total}
-                  </span>
-                )}
+                    <span className="badge warn">
+                      {check.revision > 1 ? 'Amending' : 'In progress'} {p.done}/{p.total}
+                    </span>
+                  )}
+                </span>
               </Link>
             </li>
           )

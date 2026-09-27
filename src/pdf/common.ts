@@ -70,6 +70,16 @@ export function ensureSpace(doc: jsPDF, y: number, needed: number) {
   return 18
 }
 
+/** Wrapped body text. Returns the y position after it. */
+export function drawParagraph(doc: jsPDF, y: number, text: string) {
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  const lines: string[] = doc.splitTextToSize(text, doc.internal.pageSize.getWidth() - MARGIN * 2)
+  y = ensureSpace(doc, y + 3, lines.length * 5)
+  doc.text(lines, MARGIN, y + 2)
+  return y + lines.length * 5 + 8
+}
+
 /** A coloured banner stating the overall outcome, so it can't be missed. */
 export function drawOutcome(doc: jsPDF, y: number, ok: boolean, text: string) {
   const width = doc.internal.pageSize.getWidth() - MARGIN * 2

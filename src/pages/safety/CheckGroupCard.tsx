@@ -2,16 +2,16 @@ import type { CheckResult, ChecklistGroup } from '../../domain/safetyCheck'
 import type { Photo as PhotoValue, Specialty } from '../../domain/types'
 import { Photo, SpecialtyBadge } from '../../ui/components'
 
-const EMPTY: CheckResult = { status: null, note: '' }
+const time = (iso: string) => new Date(iso).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
 
-/** One vehicle's (or the track's) checks, each with Pass / Fail and a note when failed. */
+/** One vehicle's (or the track's) checks. Each is ticked once it has been checked and is OK. */
 export function CheckGroupCard({
   group,
   results,
   photo,
   specialty,
   subtitle,
-  onChange,
+  onToggle,
   readOnly,
 }: {
   group: ChecklistGroup
@@ -19,13 +19,13 @@ export function CheckGroupCard({
   photo?: PhotoValue
   specialty?: Specialty
   subtitle?: string
-  onChange: (key: string, patch: Partial<CheckResult>) => void
+  onToggle: (key: string) => void
   readOnly: boolean
 }) {
-  const done = group.rows.filter((r) => results[r.key]?.status).length
-  const failed = group.rows.some((r) => results[r.key]?.status === 'fail')
+  const done = group.rows.filter((r) => results[r.key]).length
+  const complete = done === group.rows.length
   return (
-    <section className={`card check-group ${failed ? 'has-fail' : done === group.rows.length ? 'complete' : ''}`}>
+    <section className={`card check-group ${complete ? 'complete' : ''}`}>
       <header className="check-group-head">
         {photo !== undefined && <Photo photo={photo} alt="" className="thumb large" />}
         <div className="info">
@@ -34,51 +34,32 @@ export function CheckGroupCard({
           </h3>
           {subtitle && <div className="meta">{subtitle}</div>}
         </div>
-        <span className={`badge ${failed ? 'danger' : done === group.rows.length ? 'ok' : ''}`}>
+        <span className={`badge ${complete ? 'ok' : ''}`}>
           {done}/{group.rows.length}
         </span>
       </header>
       <ul className="check-list">
         {group.rows.map(({ key, item }) => {
-          const result = results[key] ?? EMPTY
-          const set = (patch: Partial<CheckResult>) => onChange(key, patch)
-          const noteMissing = result.status === 'fail' && !result.note.trim()
+          const result = results[key]
           return (
-            <li key={key} className={`check-item ${result.status ?? ''}`}>
-              <div className="check-label">
-                <span>{item.label}</span>
-                {item.help && <span className="meta">{item.help}</span>}
-              </div>
-              <div className="pass-fail" role="radiogroup" aria-label={item.label}>
-                {(['pass', 'fail'] as const).map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    role="radio"
-                    aria-checked={result.status === status}
-                    className={`pf ${status} ${result.status === status ? 'selected' : ''}`}
-                    disabled={readOnly}
-                    onClick={() => set({ status: result.status === status ? null : status })}
-                  >
-                    {status === 'pass' ? '✓ Pass' : '✕ Fail'}
-                  </button>
-                ))}
-              </div>
-              {(result.status === 'fail' || result.note) && (
-                <label className="field check-note">
-                  <span>
-                    {result.status === 'fail' ? 'What is wrong, and what was done about it?' : 'Note'}
-                    {noteMissing && <span className="hint"> (required)</span>}
-                  </span>
-                  <textarea
-                    value={result.note}
-                    readOnly={readOnly}
-                    rows={2}
-                    className={noteMissing ? 'invalid' : ''}
-                    onChange={(e) => set({ note: e.target.value })}
-                  />
-                </label>
-              )}
+            <li key={key}>
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={Boolean(result)}
+                className={`check-item ${result ? 'checked' : ''}`}
+                disabled={readOnly}
+                onClick={() => onToggle(key)}
+              >
+                <span className="tick" aria-hidden="true">
+                  {result ? '✓' : ''}
+                </span>
+                <span className="check-label">
+                  <span>{item.label}</span>
+                  {item.help && <span className="meta">{item.help}</span>}
+                </span>
+                {result && <span className="meta check-time">{time(result.checkedAt)}</span>}
+              </button>
             </li>
           )
         })}

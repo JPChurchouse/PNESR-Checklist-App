@@ -60,6 +60,7 @@ export interface CarriageSnapshot extends VehicleSnapshot {
 }
 
 export interface TrainCheck {
+  /** Kept across revisions, so an amendment can say what changed in each train. */
   id: string
   /** Name of the set the train was built from, if any. */
   setName: string | null
@@ -67,27 +68,42 @@ export interface TrainCheck {
   carriages: CarriageSnapshot[]
 }
 
-export type CheckStatus = 'pass' | 'fail'
-
+/**
+ * A ticked check. Anything wrong is fixed before ticking, or the vehicle is swapped out,
+ * so there is no "fail" state.
+ */
 export interface CheckResult {
-  status: CheckStatus | null
-  note: string
+  checkedAt: string
 }
+
+/**
+ * - `operate`: everything checked; the railway runs.
+ * - `cancelled`: the railway can't run today (e.g. a track fault); records why.
+ */
+export type Outcome = 'operate' | 'cancelled'
 
 export interface SafetyCheck {
   id: string
   /** Local date the check is for, YYYY-MM-DD. */
   date: string
   startedAt: string
-  /** ISO timestamp; set once signed off, after which the check is read-only. */
+  /** ISO timestamp; set once signed off, after which this revision is read-only. */
   completedAt: string | null
   trains: TrainCheck[]
-  /** Keyed by `resultKey()`. */
+  /** Keyed by `resultKey()`. A key is present only when the item is ticked. */
   results: Record<string, CheckResult>
+  outcome: Outcome
+  cancelReason: string
   managerName: string
   /** PNG data: URL of the manager's signature. */
   signature: string | null
   notes: string
+  /** 1 for the original check, 2+ for amendments. */
+  revision: number
+  /** The revision this one amends. */
+  amendsId: string | null
+  /** Why the amendment was made, e.g. "DXR broke down". */
+  amendmentReason: string
 }
 
 export const resultKey = (scope: 'track' | string, itemId: string) => `${scope}:${itemId}`
@@ -98,7 +114,7 @@ export interface ChecklistRow {
 }
 
 export interface ChecklistGroup {
-  /** e.g. "Track", "Loco DXC", "Carriage C (driver)" */
+  /** e.g. "Track", "Locomotive DXC", "Carriage C" */
   title: string
   kind: 'track' | 'loco' | 'carriage'
   vehicleId: string | null
@@ -145,27 +161,12 @@ export function buildChecklist(check: Pick<SafetyCheck, 'trains'>): ChecklistGro
 
 export interface CheckProgress {
   total: number
-  answered: number
-  passed: number
-  failed: number
-  /** Failed checks with no note explaining them. */
-  failedWithoutNote: number
+  done: number
 }
 
 export function checkProgress(check: Pick<SafetyCheck, 'trains' | 'results'>): CheckProgress {
   const rows = buildChecklist(check).flatMap((g) => g.rows)
-  const progress: CheckProgress = { total: rows.length, answered: 0, passed: 0, failed: 0, failedWithoutNote: 0 }
-  for (const { key } of rows) {
-    const result = check.results[key]
-    if (!result?.status) continue
-    progress.answered++
-    if (result.status === 'pass') progress.passed++
-    else {
-      progress.failed++
-      if (!result.note.trim()) progress.failedWithoutNote++
-    }
-  }
-  return progress
+  return { total: rows.length, done: rows.filter((r) => check.results[r.key]).length }
 }
 
 /** Problems with the trains themselves (not the checks). */
@@ -198,10 +199,15 @@ export interface SignOffState {
 }
 
 export function signOffState(check: SafetyCheck): SignOffState {
-  const reasons = [...trainProblems(check)]
-  const p = checkProgress(check)
-  if (p.answered < p.total) reasons.push(`${p.total - p.answered} check${p.total - p.answered === 1 ? '' : 's'} still to do.`)
-  if (p.failedWithoutNote) reasons.push(`Add a note to ${p.failedWithoutNote === 1 ? 'the failed check' : `each of the ${p.failedWithoutNote} failed checks`}.`)
+  const reasons: string[] = []
+  if (check.outcome === 'cancelled') {
+    if (!check.cancelReason.trim()) reasons.push("Explain why the railway can't operate.")
+  } else {
+    reasons.push(...trainProblems(check))
+    const { total, done } = checkProgress(check)
+    if (done < total) reasons.push(`${total - done} check${total - done === 1 ? '' : 's'} still to do.`)
+  }
+  if (check.revision > 1 && !check.amendmentReason.trim()) reasons.push('Give a reason for the amendment.')
   if (!check.managerName.trim()) reasons.push("Enter the shift manager's name.")
   if (!check.signature) reasons.push('The shift manager needs to sign.')
   return { canComplete: reasons.length === 0, reasons }
@@ -237,15 +243,74 @@ export function newSafetyCheck(id: string, now = new Date()): SafetyCheck {
     completedAt: null,
     trains: [],
     results: {},
+    outcome: 'operate',
+    cancelReason: '',
     managerName: '',
     signature: null,
     notes: '',
+    revision: 1,
+    amendsId: null,
+    amendmentReason: '',
   }
 }
 
-/** Drops results for vehicles no longer in any train, so they don't linger in the record. */
+/**
+ * Starts a new revision of a signed-off check. Everything already ticked carries over;
+ * only vehicles added in the amendment need checking. It must be signed again.
+ */
+export function amendSafetyCheck(previous: SafetyCheck, id: string, now = new Date()): SafetyCheck {
+  return {
+    ...structuredClone(previous),
+    id,
+    startedAt: now.toISOString(),
+    completedAt: null,
+    signature: null,
+    revision: previous.revision + 1,
+    amendsId: previous.id,
+    amendmentReason: '',
+  }
+}
+
+/** Plain-English list of what changed in the trains between two revisions. */
+export function describeTrainChanges(before: Pick<SafetyCheck, 'trains'>, after: Pick<SafetyCheck, 'trains'>): string[] {
+  const changes: string[] = []
+  const codes = (t: TrainCheck) => t.carriages.map((c) => c.code).join(' ')
+  const summary = (t: TrainCheck) => [t.loco?.code ?? 'no loco', t.setName ? `set ${t.setName}` : codes(t)].join(', ')
+
+  after.trains.forEach((train, i) => {
+    const old = before.trains.find((t) => t.id === train.id)
+    const label = `Train ${i + 1}`
+    if (!old) return changes.push(`${label} added (${summary(train)}).`)
+    if (old.loco?.id !== train.loco?.id)
+      changes.push(`${label}: locomotive ${old.loco?.code ?? 'none'} replaced by ${train.loco?.code ?? 'none'}.`)
+    if (codes(old) !== codes(train)) changes.push(`${label}: carriages changed from ${codes(old) || 'none'} to ${codes(train) || 'none'}.`)
+  })
+  before.trains.forEach((train) => {
+    if (!after.trains.some((t) => t.id === train.id)) changes.push(`A train was removed (${summary(train)}).`)
+  })
+  return changes
+}
+
+/** Drops ticks for vehicles no longer in any train, so they don't linger in the record. */
 export function pruneResults(check: SafetyCheck): SafetyCheck {
   const keys = new Set(buildChecklist(check).flatMap((g) => g.rows.map((r) => r.key)))
   const results = Object.fromEntries(Object.entries(check.results).filter(([k]) => keys.has(k)))
   return { ...check, results }
+}
+
+/** The revisions a check amends, oldest first, ending with the check itself. */
+export function revisionChain(check: SafetyCheck, all: SafetyCheck[]): SafetyCheck[] {
+  const byId = new Map(all.map((c) => [c.id, c]))
+  const chain = [check]
+  for (let c = check; c.amendsId && byId.has(c.amendsId); ) {
+    c = byId.get(c.amendsId)!
+    chain.unshift(c)
+  }
+  return chain
+}
+
+/** Checks worth listing: every check except those replaced by a signed-off amendment. */
+export function currentChecks(all: SafetyCheck[]): SafetyCheck[] {
+  const superseded = new Set(all.filter((c) => c.completedAt && c.amendsId).map((c) => c.amendsId))
+  return all.filter((c) => !superseded.has(c.id))
 }

@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf'
 import { autoTable, type CellHookData, type RowInput } from 'jspdf-autotable'
-import { buildChecklist, checkProgress, type ChecklistGroup, type SafetyCheck } from '../domain/safetyCheck'
+import { buildChecklist, checkProgress, describeTrainChanges, type ChecklistGroup, type SafetyCheck } from '../domain/safetyCheck'
 import { SPECIALTY_LABELS } from '../domain/types'
 import {
   COLOURS,
@@ -8,6 +8,7 @@ import {
   drawFooters,
   drawHeader,
   drawOutcome,
+  drawParagraph,
   drawSectionTitle,
   ensureSpace,
   formatDate,
@@ -17,133 +18,141 @@ import {
   tableTheme,
 } from './common'
 
-const RESULT_TEXT = { pass: 'Pass', fail: 'FAIL' } as const
+const NOT_CHECKED = 'NOT CHECKED'
 
-/** Colours the Result column (at `column`): green for pass, bold red for fail. */
-const styleResult = (column: number) => (data: CellHookData) => {
+const time = (iso: string) => new Date(iso).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
+
+/** Colours the "Checked" column (at `column`): green tick times, bold red when not checked. */
+const styleChecked = (column: number) => (data: CellHookData) => {
   if (data.section !== 'body' || data.column.index !== column) return
-  if (data.cell.raw === RESULT_TEXT.pass) data.cell.styles.textColor = [...COLOURS.ok]
-  if (data.cell.raw === RESULT_TEXT.fail) {
+  if (data.cell.raw === NOT_CHECKED) {
     data.cell.styles.textColor = [...COLOURS.fail]
     data.cell.styles.fontStyle = 'bold'
-  }
+  } else data.cell.styles.textColor = [...COLOURS.ok]
 }
 
-function groupRows(check: SafetyCheck, groups: ChecklistGroup[]): RowInput[] {
+// The built-in PDF fonts have no tick glyph, so checked items show the time only.
+const checkedCell = (check: SafetyCheck, key: string) => {
+  const r = check.results[key]
+  return r ? time(r.checkedAt) : NOT_CHECKED
+}
+
+function vehicleRows(check: SafetyCheck, groups: ChecklistGroup[]): RowInput[] {
   return groups.flatMap((group) =>
     group.rows.map((row, i) => {
-      const result = check.results[row.key]
-      return [
-        i === 0 ? { content: group.title.replace(/^(Locomotive|Carriage) /, ''), rowSpan: group.rows.length, styles: { fontStyle: 'bold', valign: 'top' } } : null,
-        row.item.label,
-        result?.status ? RESULT_TEXT[result.status] : 'Not checked',
-        result?.note ?? '',
-      ].filter((cell) => cell !== null) as RowInput
+      const cells: RowInput = []
+      if (i === 0)
+        cells.push({
+          content: group.title.replace(/^(Locomotive|Carriage) /, ''),
+          rowSpan: group.rows.length,
+          styles: { fontStyle: 'bold', valign: 'top' },
+        })
+      cells.push(row.item.label, checkedCell(check, row.key))
+      return cells
     }),
   )
 }
 
-/** `compress: false` keeps the text readable in the raw bytes, for tests. */
-export function buildSafetyCheckPdf(check: SafetyCheck, { compress = true } = {}): jsPDF {
+/**
+ * @param chain every revision up to and including `check`, oldest first (just `[check]` if never amended)
+ * @param compress false keeps the text readable in the raw bytes, for tests
+ */
+export function buildSafetyCheckPdf(check: SafetyCheck, chain: SafetyCheck[] = [check], { compress = true } = {}): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress })
   const groups = buildChecklist(check)
   const progress = checkProgress(check)
+  const cancelled = check.outcome === 'cancelled'
 
   let y = drawHeader(doc, 'Pre-operation Safety Check')
-  y = drawFacts(doc, y, [
-    ['Date', formatDate(check.date)],
-    ['Completed', check.completedAt ? formatDateTime(check.completedAt) : 'NOT COMPLETED'],
+  const facts: [string, string][] = [['Date', formatDate(check.date)]]
+  if (check.revision > 1) facts.push(['Revision', `${check.revision} (amended)`])
+  facts.push(
+    ['Signed off', check.completedAt ? formatDateTime(check.completedAt) : 'NOT SIGNED OFF'],
     ['Shift manager', check.managerName || '—'],
     ['Trains', String(check.trains.length)],
-  ])
-  y += 2
-  const allPassed = progress.failed === 0 && progress.answered === progress.total
-  y = drawOutcome(
-    doc,
-    y,
-    allPassed,
-    allPassed
-      ? `All ${progress.total} checks passed`
-      : progress.failed
-        ? `${progress.failed} check${progress.failed === 1 ? '' : 's'} failed: see notes below`
-        : `${progress.total - progress.answered} checks not completed`,
   )
+  y = drawFacts(doc, y, facts) + 2
 
-  const failures = groups.flatMap((g) =>
-    g.rows.filter((row) => check.results[row.key]?.status === 'fail').map((row) => [g.title, row.item.label, check.results[row.key].note]),
-  )
-  if (failures.length) {
-    y = drawSectionTitle(doc, y, 'Failed checks')
+  if (cancelled) y = drawOutcome(doc, y, false, 'Railway NOT operating')
+  else if (!check.completedAt) y = drawOutcome(doc, y, false, 'Not signed off')
+  else if (progress.done === progress.total) y = drawOutcome(doc, y, true, `Ready to operate: all ${progress.total} checks completed`)
+  else y = drawOutcome(doc, y, false, `${progress.total - progress.done} checks not completed`)
+
+  if (cancelled) {
+    y = drawSectionTitle(doc, y, 'Reason the railway is not operating')
+    y = drawParagraph(doc, y, check.cancelReason || '—')
+  }
+
+  if (chain.length > 1) {
+    y = drawSectionTitle(doc, y, 'Revision history')
     autoTable(doc, {
       ...tableTheme,
       startY: y,
-      head: [['Where', 'Check', 'Note / action taken']],
-      body: failures,
-      headStyles: { ...tableTheme.headStyles, fillColor: [...COLOURS.fail] },
-      columnStyles: { 0: { cellWidth: 38, fontStyle: 'bold' }, 1: { cellWidth: 62 } },
+      head: [['Rev', 'Signed off', 'Manager', 'Reason and changes']],
+      body: chain.map((rev, i) => [
+        String(rev.revision),
+        rev.completedAt ? formatDateTime(rev.completedAt) : 'Not signed off',
+        rev.managerName,
+        i === 0 ? 'Original check' : [rev.amendmentReason, ...describeTrainChanges(chain[i - 1], rev)].filter(Boolean).join('\n'),
+      ]),
+      columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 44 }, 2: { cellWidth: 34 } },
     })
     y = tableEnd(doc) + 9
   }
 
-  y = drawSectionTitle(doc, y, 'Trains')
-  autoTable(doc, {
-    ...tableTheme,
-    startY: y,
-    head: [['Train', 'Locomotive', 'Carriages (front to back)', 'Set']],
-    body: check.trains.map((t, i) => [
-      String(i + 1),
-      t.loco ? `${t.loco.code}${t.loco.livery ? ` (${t.loco.livery})` : ''}` : '—',
-      t.carriages.map((c) => (c.specialty === 'standard' ? c.code : `${c.code} (${SPECIALTY_LABELS[c.specialty].toLowerCase()})`)).join(', '),
-      t.setName ?? 'Custom',
-    ]),
-    columnStyles: { 0: { cellWidth: 14 }, 3: { cellWidth: 24 } },
-  })
-  y = tableEnd(doc) + 9
+  if (check.trains.length) {
+    y = drawSectionTitle(doc, y, 'Trains')
+    autoTable(doc, {
+      ...tableTheme,
+      startY: y,
+      head: [['Train', 'Locomotive', 'Carriages (front to back)', 'Set']],
+      body: check.trains.map((t, i) => [
+        String(i + 1),
+        t.loco ? `${t.loco.code}${t.loco.livery ? ` (${t.loco.livery})` : ''}` : '—',
+        t.carriages.map((c) => (c.specialty === 'standard' ? c.code : `${c.code} (${SPECIALTY_LABELS[c.specialty].toLowerCase()})`)).join(', '),
+        t.setName ?? 'Custom',
+      ]),
+      columnStyles: { 0: { cellWidth: 14 }, 3: { cellWidth: 24 } },
+    })
+    y = tableEnd(doc) + 9
+  }
 
-  const trackGroup = groups.filter((g) => g.kind === 'track')
   y = drawSectionTitle(doc, y, 'Track')
   autoTable(doc, {
     ...tableTheme,
     startY: y,
-    head: [['Check', 'Result', 'Note']],
-    body: trackGroup[0].rows.map((row) => {
-      const r = check.results[row.key]
-      return [row.item.label, r?.status ? RESULT_TEXT[r.status] : 'Not checked', r?.note ?? '']
-    }),
-    columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 20 } },
-    didParseCell: styleResult(1),
+    head: [['Check', 'Checked at']],
+    body: groups[0].rows.map((row) => [row.item.label, checkedCell(check, row.key)]),
+    columnStyles: { 1: { cellWidth: 30 } },
+    didParseCell: styleChecked(1),
   })
   y = tableEnd(doc) + 9
 
   check.trains.forEach((train, trainIndex) => {
     const trainGroups = groups.filter((g) => g.trainIndex === trainIndex)
+    if (!trainGroups.length) return
     const title = `Train ${trainIndex + 1}: ${train.loco ? `loco ${train.loco.code}` : 'no loco'}${train.setName ? `, set ${train.setName}` : ''}`
     y = drawSectionTitle(doc, y, title)
     autoTable(doc, {
       ...tableTheme,
       startY: y,
-      head: [['Vehicle', 'Check', 'Result', 'Note']],
-      body: groupRows(check, trainGroups),
-      columnStyles: { 0: { cellWidth: 18 }, 1: { cellWidth: 82 }, 2: { cellWidth: 20 } },
-      didParseCell: styleResult(2),
+      head: [['Vehicle', 'Check', 'Checked at']],
+      body: vehicleRows(check, trainGroups),
+      columnStyles: { 0: { cellWidth: 18 }, 2: { cellWidth: 30 } },
+      didParseCell: styleChecked(2),
     })
     y = tableEnd(doc) + 9
   })
 
   if (check.notes.trim()) {
     y = drawSectionTitle(doc, y, 'Notes')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    const lines = doc.splitTextToSize(check.notes.trim(), doc.internal.pageSize.getWidth() - MARGIN * 2)
-    y = ensureSpace(doc, y + 3, lines.length * 5)
-    doc.text(lines, MARGIN, y + 2)
-    y += lines.length * 5 + 8
+    y = drawParagraph(doc, y, check.notes.trim())
   }
 
   y = drawSectionTitle(doc, ensureSpace(doc, y, 55), 'Sign-off')
   y = drawFacts(doc, y + 5, [
     ['Shift manager', check.managerName || '—'],
-    ['Completed', check.completedAt ? formatDateTime(check.completedAt) : 'NOT COMPLETED'],
+    ['Signed off', check.completedAt ? formatDateTime(check.completedAt) : 'NOT SIGNED OFF'],
   ])
   doc.setFont('helvetica', 'bold')
   doc.text('Signature:', MARGIN, y)
@@ -158,8 +167,9 @@ export function buildSafetyCheckPdf(check: SafetyCheck, { compress = true } = {}
   doc.setDrawColor(...COLOURS.muted)
   doc.line(sigX, sigTop + sigH + 1, sigX + 90, sigTop + sigH + 1)
 
-  drawFooters(doc, `Safety check ${check.date}`)
+  drawFooters(doc, `Safety check ${check.date}${check.revision > 1 ? ` rev ${check.revision}` : ''}`)
   return doc
 }
 
-export const safetyCheckFilename = (check: SafetyCheck) => `safety-check-${check.date}.pdf`
+export const safetyCheckFilename = (check: SafetyCheck) =>
+  `safety-check-${check.date}${check.revision > 1 ? `-rev${check.revision}` : ''}.pdf`

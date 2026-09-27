@@ -22,6 +22,25 @@ class Db extends Dexie {
     this.version(2).stores({
       safetyChecks: 'id, startedAt',
     })
+    // v3: pass/fail replaced by a tick with a time, and revisions added.
+    this.version(3).upgrade((tx) =>
+      tx
+        .table('safetyChecks')
+        .toCollection()
+        .modify((check: Record<string, unknown>) => {
+          const old = check.results as Record<string, { status?: string; checkedAt?: string }>
+          check.results = Object.fromEntries(
+            Object.entries(old)
+              .filter(([, r]) => r.checkedAt || r.status === 'pass')
+              .map(([k, r]) => [k, { checkedAt: r.checkedAt ?? (check.completedAt as string) ?? (check.startedAt as string) }]),
+          )
+          check.outcome ??= 'operate'
+          check.cancelReason ??= ''
+          check.revision ??= 1
+          check.amendsId ??= null
+          check.amendmentReason ??= ''
+        }),
+    )
     this.on('populate', (tx) => {
       const fleet = seedFleet()
       tx.table('liveries').bulkAdd(fleet.liveries)
