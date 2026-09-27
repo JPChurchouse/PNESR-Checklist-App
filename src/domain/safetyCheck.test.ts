@@ -23,6 +23,8 @@ const loco = (code: string) => snapshotLoco(fleet, fleet.locomotives.find((l) =>
 const train = (locoCode: string, cars: string, id = `t-${locoCode}`): TrainCheck => ({
   id,
   setName: null,
+  driver: '',
+  guard: '',
   loco: loco(locoCode),
   carriages: cars.split('').map(car),
 })
@@ -142,7 +144,9 @@ describe('amendments', () => {
       'Train 2: locomotive DXR replaced by DG.',
       'Train 3 added (DXC, J P R S Q L).',
     ])
-    rev2.trains = [rev2.trains[0]]
+    rev2.trains[0] = { ...rev2.trains[0], driver: 'Alex' }
+    expect(describeTrainChanges(original, rev2)).toContain('Train 1: driver none replaced by Alex.')
+    rev2.trains = [original.trains[0]]
     expect(describeTrainChanges(original, rev2)).toEqual(['A train was removed (DXR, E F G N O H).'])
   })
 

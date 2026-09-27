@@ -6,6 +6,7 @@ import {
   checkProgress,
   describeTrainChanges,
   MAX_TRAINS,
+  newTrain,
   pruneResults,
   signOffState,
   trainProblems,
@@ -17,9 +18,11 @@ import { revisionChainOf as revisionChain } from '../../domain/revisions'
 import type { Fleet } from '../../domain/types'
 import { formatDate, formatDateTime } from '../../lib/dates'
 import { newId } from '../../lib/ids'
-import { useFleet, useRepository } from '../../storage/hooks'
+import { findStaff, managerProblem } from '../../domain/staff'
+import { useFleet, useRepository, useStaff } from '../../storage/hooks'
 import { ErrorNotice, Field } from '../../ui/components'
 import { SignaturePad } from '../../ui/SignaturePad'
+import { StaffNameInput } from '../../ui/StaffInputs'
 import { CheckGroupCard } from './CheckGroupCard'
 import { TrainEditor } from './TrainEditor'
 
@@ -56,6 +59,7 @@ export function SafetyCheckPage() {
 function SafetyCheckForm({ initial, all, fleet }: { initial: SafetyCheck; all: SafetyCheck[]; fleet: Fleet }) {
   const repo = useRepository()
   const navigate = useNavigate()
+  const staff = useStaff()
   const [check, setCheck] = useState(initial)
   // Latest version, so quick successive taps each build on the one before rather than a stale render.
   const latest = useRef(initial)
@@ -199,6 +203,7 @@ function SafetyCheckForm({ initial, all, fleet }: { initial: SafetyCheck; all: S
             index={i}
             train={train}
             fleet={fleet}
+            staff={staff}
             readOnly={readOnly}
             usedIds={new Set(check.trains.filter((_, j) => j !== i).flatMap((t) => [t.loco?.id ?? '', ...t.carriages.map((c) => c.id)]))}
             onChange={(t) => setTrain(i, t)}
@@ -210,7 +215,7 @@ function SafetyCheckForm({ initial, all, fleet }: { initial: SafetyCheck; all: S
             <button
               type="button"
               className="btn"
-              onClick={() => update((c) => ({ ...c, trains: [...c.trains, { id: newId('train'), setName: null, loco: null, carriages: [] }] }))}
+              onClick={() => update((c) => ({ ...c, trains: [...c.trains, newTrain(newId('train'))] }))}
             >
               + Add train
             </button>
@@ -302,12 +307,13 @@ function SafetyCheckForm({ initial, all, fleet }: { initial: SafetyCheck; all: S
           <textarea value={check.notes} readOnly={readOnly} onChange={(e) => update((c) => ({ ...c, notes: e.target.value }))} />
         </Field>
         <Field label="Shift manager">
-          <input
-            type="text"
+          <StaffNameInput
+            staff={staff}
+            role="manager"
             value={check.managerName}
             readOnly={readOnly}
-            autoComplete="name"
-            onChange={(e) => update((c) => ({ ...c, managerName: e.target.value }))}
+            problem={managerProblem(findStaff(staff, check.managerName))}
+            onChange={(managerName) => update((c) => ({ ...c, managerName }))}
           />
         </Field>
         <div className="field">

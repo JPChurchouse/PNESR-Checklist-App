@@ -155,3 +155,16 @@ describe('upgrading older ticket sheets', () => {
     expect(sheet).not.toHaveProperty('cashier')
   })
 })
+
+describe('staff storage', () => {
+  it('replaces the whole list on import', async () => {
+    const repo = freshRepo()
+    const person = (id: string, firstName: string) => ({
+      id, firstName, surname: 'Example', displayName: firstName, mobile: '', landLine: '', manager: false, cashier: true, guard: false, driver: false, classA: [],
+    })
+    await repo.replaceStaff([person('1', 'Zed'), person('2', 'Amy')])
+    expect((await repo.listStaff()).map((s) => s.firstName)).toEqual(['Amy', 'Zed'])
+    await repo.replaceStaff([person('3', 'Bo')])
+    expect((await repo.listStaff()).map((s) => s.firstName)).toEqual(['Bo'])
+  })
+})

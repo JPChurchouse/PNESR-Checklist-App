@@ -38,9 +38,9 @@ A web app replacing two paper forms for a miniature ride-on railway (PNESR):
 1. **Pre-operation safety check**: track checks, then per-locomotive and per-carriage checks for the trains running that day. Exported as a PDF with completion date/time and the shift manager's name/signature.
 2. **Ticket sales sheet**: one per station (Victoria and Playground), each exported as a **separate PDF**. Records ticket serial numbers, float, cash/EFTPOS takings and donations, and reconciles tickets sold against money taken.
 
-## Hosting is undecided
+## Hosting
 
-The app may stay on each device, or be served from a Raspberry Pi on the facility Wi-Fi with a shared database. Keep all persistence behind a storage interface so either backend can be plugged in; don't let UI code talk to IndexedDB or an HTTP API directly.
+Decided for now: device-only (IndexedDB on each phone/tablet). A Raspberry Pi server on the club Wi-Fi may come later, so keep all persistence behind the `Repository` interface; don't let UI code talk to IndexedDB or an HTTP API directly.
 
 ## Domain rules that shape the design
 
@@ -58,7 +58,9 @@ The app may stay on each device, or be served from a Raspberry Pi on the facilit
 
 ## Staff data
 
-`staff-list*.csv` (the club's Google Sheets export) is gitignored: it holds addresses, phone numbers, emails and dates of birth. Any future import should keep only names and qualifications.
+`src/domain/staff.ts` imports the club's Google Sheets CSV export (Staff page). Columns are matched by heading: Name, Surname, Mobile, Land Line, DOS (= qualified manager; old name), Cashier, Guard, Driver, Class A (locos they may drive with passengers), Roster Entry (display name, e.g. "Jamie C (CD)"). Drivers are always guards too. Addresses, emails, DOB etc. are ignored. Phone numbers are kept on purpose, for a future rostering link and mass texts. Staff pickers suggest names, but free text is always allowed, and qualification problems are warnings, not blockers.
+
+`staff-list*.csv` is gitignored because it holds real personal details. Test fixtures use made-up people.
 
 ## Assets
 

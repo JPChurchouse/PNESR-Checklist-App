@@ -105,14 +105,16 @@ export function buildSafetyCheckPdf(check: SafetyCheck, chain: SafetyCheck[] = [
     autoTable(doc, {
       ...tableTheme,
       startY: y,
-      head: [['Train', 'Locomotive', 'Carriages (front to back)', 'Set']],
+      head: [['Train', 'Locomotive', 'Carriages (front to back)', 'Set', 'Driver', 'Guard']],
       body: check.trains.map((t, i) => [
         String(i + 1),
         t.loco ? `${t.loco.code}${t.loco.livery ? ` (${t.loco.livery})` : ''}` : '—',
         t.carriages.map((c) => (c.specialty === 'standard' ? c.code : `${c.code} (${SPECIALTY_LABELS[c.specialty].toLowerCase()})`)).join(', '),
         t.setName ?? 'Custom',
+        t.driver.trim() || '—',
+        t.guard.trim() || '—',
       ]),
-      columnStyles: { 0: { cellWidth: 14 }, 3: { cellWidth: 24 } },
+      columnStyles: { 0: { cellWidth: 14 }, 3: { cellWidth: 16 } },
     })
     y = tableEnd(doc) + 9
   }

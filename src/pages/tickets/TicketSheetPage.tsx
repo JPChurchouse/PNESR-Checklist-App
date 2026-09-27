@@ -22,10 +22,12 @@ import {
 import { formatDate, formatDateTime } from '../../lib/dates'
 import { newId } from '../../lib/ids'
 import { resizePhoto } from '../../lib/photos'
-import { useRepository } from '../../storage/hooks'
+import { cashierProblems, findStaff, fullName, managerProblem } from '../../domain/staff'
+import { useRepository, useStaff } from '../../storage/hooks'
 import { ErrorNotice, Field } from '../../ui/components'
 import { ColourSwatch, MoneyInput, WholeInput } from '../../ui/inputs'
 import { SignaturePad } from '../../ui/SignaturePad'
+import { AddStaffSelect, StaffNameInput } from '../../ui/StaffInputs'
 import { CashCount, FloatCheckList } from './CashCount'
 
 /** `chain` is every revision up to and including `sheet`, oldest first. */
@@ -66,6 +68,7 @@ const EFTPOS_FIELDS: [keyof EftposEntry, string, string][] = [
 function TicketSheetForm({ initial, all }: { initial: TicketSheet; all: TicketSheet[] }) {
   const repo = useRepository()
   const navigate = useNavigate()
+  const staff = useStaff()
   const [sheet, setSheet] = useState(initial)
   // Latest version, so quick successive edits each build on the one before.
   const latest = useRef(initial)
@@ -204,14 +207,36 @@ function TicketSheetForm({ initial, all }: { initial: TicketSheet; all: TicketSh
             <input type="text" value={sheet.eventName} readOnly={startLocked} onChange={(e) => update((s) => ({ ...s, eventName: e.target.value }))} />
           </Field>
         )}
-        <div className="form-grid">
-          <Field label="Cashier(s)">
+        <div className="field">
+          <Field label="Cashier(s)" hint="separate names with commas">
             <input type="text" value={sheet.cashiers} readOnly={startLocked} onChange={(e) => update((s) => ({ ...s, cashiers: e.target.value }))} />
           </Field>
+          {cashierProblems(staff, sheet.cashiers).map((p) => (
+            <span key={p} className="input-warning">
+              ⚠ {p}
+            </span>
+          ))}
+          {!startLocked && (
+            <AddStaffSelect
+              staff={staff}
+              role="cashier"
+              exclude={sheet.cashiers.split(',')}
+              onAdd={(p) => update((s) => ({ ...s, cashiers: [s.cashiers.trim(), fullName(p)].filter(Boolean).join(', ') }))}
+            />
+          )}
         </div>
-        <Field label="Staff on shift" hint="one per line, with their role if you like">
-          <textarea value={sheet.staff} readOnly={startLocked} rows={4} onChange={(e) => update((s) => ({ ...s, staff: e.target.value }))} />
-        </Field>
+        <div className="field">
+          <Field label="Staff on shift" hint="one per line, with their role if you like">
+            <textarea value={sheet.staff} readOnly={startLocked} rows={4} onChange={(e) => update((s) => ({ ...s, staff: e.target.value }))} />
+          </Field>
+          {!startLocked && (
+            <AddStaffSelect
+              staff={staff}
+              exclude={sheet.staff.split('\n')}
+              onAdd={(p) => update((s) => ({ ...s, staff: [s.staff.trimEnd(), p.displayName].filter(Boolean).join('\n') }))}
+            />
+          )}
+        </div>
 
         <h3>Ticket start numbers</h3>
         <p className="meta">The number on the first ticket of each roll. Leave a roll blank if it isn't being used today.</p>
@@ -224,8 +249,9 @@ function TicketSheetForm({ initial, all }: { initial: TicketSheet; all: TicketSh
               </div>
               <ColourSwatch colour={t.colour} />
               <Field label="Start number">
-                <WholeInput value={t.startSerial} readOnly={startLocked} onChange={(v) => setLine(i, { startSerial: v })} />
+                <WholeInput value={t.startSerial} readOnly={startLocked} onChange={(v) => setLine(i, { startSerial: v, carriedFrom: undefined })} />
               </Field>
+              {t.carriedFrom && !startLocked && <span className="meta">From the end of the {t.carriedFrom} sheet. Check it matches the roll.</span>}
             </div>
           ))}
         </div>
@@ -406,7 +432,14 @@ function TicketSheetForm({ initial, all }: { initial: TicketSheet; all: TicketSh
               <textarea value={sheet.notes} readOnly={completed} onChange={(e) => update((s) => ({ ...s, notes: e.target.value }))} />
             </Field>
             <Field label="Shift manager">
-              <input type="text" value={sheet.managerName} readOnly={completed} autoComplete="name" onChange={(e) => update((s) => ({ ...s, managerName: e.target.value }))} />
+              <StaffNameInput
+                staff={staff}
+                role="manager"
+                value={sheet.managerName}
+                readOnly={completed}
+                problem={managerProblem(findStaff(staff, sheet.managerName))}
+                onChange={(managerName) => update((s) => ({ ...s, managerName }))}
+              />
             </Field>
             <div className="field">
               <span>Shift manager's signature</span>

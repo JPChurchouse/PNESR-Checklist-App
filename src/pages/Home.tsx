@@ -20,6 +20,10 @@ export function Home() {
           <h2>Fleet</h2>
           <p className="meta">Locomotives, carriages, carriage sets and liveries.</p>
         </Link>
+        <Link className="card home-card" to="/staff">
+          <h2>Staff</h2>
+          <p className="meta">Import the staff list so names and qualifications can be picked on the forms.</p>
+        </Link>
         <Link className="card home-card" to="/settings/tickets">
           <h2>Tickets and float</h2>
           <p className="meta">Ticket prices and colours, and what goes in the float.</p>

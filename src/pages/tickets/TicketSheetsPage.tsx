@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { formatMoney } from '../../domain/money'
 import { currentRecords } from '../../domain/revisions'
-import { newTicketSheet, reconcile, STATIONS, type SheetKind, type StationId, type TicketSheet } from '../../domain/tickets'
+import { carryOverSerials, lastSignedOff, newTicketSheet, reconcile, STATIONS, type SheetKind, type StationId, type TicketSheet } from '../../domain/tickets'
 import { formatDate, localDate } from '../../lib/dates'
 import { newId } from '../../lib/ids'
 import { useRepository } from '../../storage/hooks'
@@ -37,7 +37,7 @@ export function TicketSheetsPage() {
   async function start(kind: SheetKind) {
     setStarting(true)
     try {
-      const sheet = newTicketSheet(newId('sheet'), station, await repo.getTicketSettings(), kind)
+      const sheet = carryOverSerials(newTicketSheet(newId('sheet'), station, await repo.getTicketSettings(), kind), lastSignedOff(sheets ?? [], kind))
       await repo.saveTicketSheet(sheet)
       navigate(sheet.id)
     } catch (err) {

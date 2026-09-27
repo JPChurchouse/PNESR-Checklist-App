@@ -1,4 +1,5 @@
 import { useContext, useEffect, useState } from 'react'
+import type { StaffMember } from '../domain/staff'
 import type { Fleet } from '../domain/types'
 import { RepositoryContext } from './context'
 import type { Repository } from './repository'
@@ -27,4 +28,14 @@ export function useFleet(): FleetState {
     [repo],
   )
   return state
+}
+
+/** The staff list for name suggestions; empty until loaded (or if none has been imported). */
+export function useStaff(): StaffMember[] {
+  const repo = useRepository()
+  const [staff, setStaff] = useState<StaffMember[]>([])
+  useEffect(() => {
+    repo.listStaff().then(setStaff, () => setStaff([]))
+  }, [repo])
+  return staff
 }

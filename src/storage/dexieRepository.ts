@@ -1,6 +1,7 @@
 import Dexie, { liveQuery, type EntityTable } from 'dexie'
 import type { SafetyCheck } from '../domain/safetyCheck'
 import { seedFleet } from '../domain/seed'
+import type { StaffMember } from '../domain/staff'
 import { withSettingDefaults, type StationId, type TicketSettings, type TicketSheet } from '../domain/tickets'
 import type { Carriage, CarriageSet, Fleet, Livery, Locomotive } from '../domain/types'
 import { StorageRuleError, type Repository } from './repository'
@@ -13,6 +14,7 @@ class Db extends Dexie {
   safetyChecks!: EntityTable<SafetyCheck, 'id'>
   settings!: EntityTable<{ id: string; value: unknown }, 'id'>
   ticketSheets!: EntityTable<TicketSheet, 'id'>
+  staff!: EntityTable<StaffMember, 'id'>
 
   constructor(name: string) {
     super(name)
@@ -79,6 +81,20 @@ class Db extends Dexie {
           sheet.amendmentReason ??= ''
         }),
     )
+    // v6: staff list, and a driver and guard for each train.
+    this.version(6)
+      .stores({ staff: 'id' })
+      .upgrade((tx) =>
+        tx
+          .table('safetyChecks')
+          .toCollection()
+          .modify((check: { trains: { driver?: string; guard?: string }[] }) => {
+            for (const t of check.trains) {
+              t.driver ??= ''
+              t.guard ??= ''
+            }
+          }),
+      )
     this.on('populate', (tx) => {
       const fleet = seedFleet()
       tx.table('liveries').bulkAdd(fleet.liveries)
@@ -213,6 +229,18 @@ export class DexieRepository implements Repository {
       const sheet = await db.ticketSheets.get(id)
       if (sheet?.completedAt) throw new StorageRuleError('A completed ticket sheet is a record and can’t be deleted.')
       await db.ticketSheets.delete(id)
+    })
+  }
+
+  async listStaff() {
+    return (await this.db.staff.toArray()).sort((a, b) => `${a.firstName} ${a.surname}`.localeCompare(`${b.firstName} ${b.surname}`))
+  }
+
+  async replaceStaff(staff: StaffMember[]) {
+    const { db } = this
+    await db.transaction('rw', db.staff, async () => {
+      await db.staff.clear()
+      await db.staff.bulkAdd(staff)
     })
   }
 

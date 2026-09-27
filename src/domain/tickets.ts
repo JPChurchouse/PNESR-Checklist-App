@@ -93,6 +93,8 @@ export interface TicketLine {
   colour: string
   /** First ticket on the roll at the start of the shift. */
   startSerial: number | null
+  /** Date of the sheet the start number was carried over from, if it was. */
+  carriedFrom?: string
   /** First ticket left on the roll at the end of the shift (the next one to be sold). */
   endSerial: number | null
 }
@@ -183,6 +185,28 @@ export const sheetTitle = (sheet: Pick<TicketSheet, 'kind' | 'station' | 'eventN
   sheet.kind === 'event'
     ? `${STATIONS[sheet.station].name} special event${sheet.eventName.trim() ? `: ${sheet.eventName.trim()}` : ''}`
     : STATIONS[sheet.station].name
+
+/**
+ * Fills in each roll's start number from where the last signed-off sheet at this station ended
+ * (its end number is the next ticket to be sold). Only rolls of the same ticket type carry over.
+ */
+export function carryOverSerials(sheet: TicketSheet, previous: TicketSheet | undefined): TicketSheet {
+  if (!previous) return sheet
+  return {
+    ...sheet,
+    tickets: sheet.tickets.map((t) => {
+      const before = previous.tickets.find((p) => p.typeId === t.typeId)
+      return before?.endSerial != null ? { ...t, startSerial: before.endSerial, carriedFrom: previous.date } : t
+    }),
+  }
+}
+
+/** The sheet whose end numbers the next sheet should start from: the latest signed-off one of that kind. */
+export function lastSignedOff(sheets: TicketSheet[], kind: SheetKind): TicketSheet | undefined {
+  return sheets
+    .filter((s) => s.completedAt && s.kind === kind && !sheets.some((o) => o.amendsId === s.id && o.completedAt))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.completedAt!.localeCompare(a.completedAt!))[0]
+}
 
 // ---------- Tickets ----------
 

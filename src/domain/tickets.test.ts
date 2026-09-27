@@ -4,6 +4,7 @@ import { currentRecords, revisionChainOf } from './revisions'
 import {
   amendTicketSheet,
   balanceText,
+  carryOverSerials,
   checkFloat,
   completionProblems,
   countTotal,
@@ -11,6 +12,7 @@ import {
   describeSheetChanges,
   floatItemLabel,
   floatTotal,
+  lastSignedOff,
   newTicketSheet,
   reconcile,
   resolveEftpos,
@@ -262,5 +264,29 @@ describe('corrections', () => {
     const rev2 = { ...amendTicketSheet(original, 'rev2'), completedAt: new Date(2026, 8, 28).toISOString() }
     expect(currentRecords([original, rev2]).map((s) => s.id)).toEqual(['rev2'])
     expect(revisionChainOf(rev2, [rev2, original]).map((s) => s.id)).toEqual(['rev1', 'rev2'])
+  })
+})
+
+describe('carrying ticket numbers over', () => {
+  const yesterday = { ...finishedShift(), id: 'y', date: '2026-09-26', completedAt: '2026-09-26T05:00:00.000Z' }
+
+  it('starts each roll where the last signed-off sheet ended', () => {
+    const today = carryOverSerials(sheet(), yesterday)
+    expect(today.tickets.map((t) => [t.name, t.startSerial, t.carriedFrom])).toEqual([
+      ['One-way', 123476, '2026-09-26'],
+      ['Return', 200130, '2026-09-26'],
+      ['Supporter', 5005, '2026-09-26'],
+      ['Concession', 902, '2026-09-26'],
+    ])
+  })
+
+  it('uses the latest signed-off sheet of the same kind, after any correction', () => {
+    const older = { ...yesterday, id: 'o', date: '2026-09-20' }
+    const corrected = { ...amendTicketSheet(yesterday, 'y2'), completedAt: '2026-09-27T01:00:00.000Z' }
+    const draft = { ...sheet(), id: 'd', date: '2026-09-28' }
+    const event = { ...newTicketSheet('e', 'victoria', DEFAULT_TICKET_SETTINGS, 'event', DAY), completedAt: '2026-09-27T09:00:00.000Z' }
+    expect(lastSignedOff([older, yesterday, corrected, draft, event], 'regular')?.id).toBe('y2')
+    expect(lastSignedOff([older, yesterday, event], 'event')?.id).toBe('e')
+    expect(lastSignedOff([draft], 'regular')).toBeUndefined()
   })
 })

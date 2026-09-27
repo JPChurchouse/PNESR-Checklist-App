@@ -1,4 +1,5 @@
 import type { SafetyCheck } from '../domain/safetyCheck'
+import type { StaffMember } from '../domain/staff'
 import type { StationId, TicketSettings, TicketSheet } from '../domain/tickets'
 import type { Carriage, CarriageSet, Fleet, Livery, Locomotive } from '../domain/types'
 
@@ -43,6 +44,11 @@ export interface Repository {
   saveTicketSheet(sheet: TicketSheet): Promise<void>
   /** Rejects with a `StorageRuleError` if the sheet has been completed. */
   deleteTicketSheet(id: string): Promise<void>
+
+  /** Sorted by first name. */
+  listStaff(): Promise<StaffMember[]>
+  /** Replaces the whole list, e.g. with a fresh import from the club's spreadsheet. */
+  replaceStaff(staff: StaffMember[]): Promise<void>
 }
 
 /** A write refused because it would leave the data inconsistent. The message is shown to the user. */

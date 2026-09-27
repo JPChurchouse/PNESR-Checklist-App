@@ -67,7 +67,12 @@ export interface TrainCheck {
   setName: string | null
   loco: LocoSnapshot | null
   carriages: CarriageSnapshot[]
+  /** Crew names, as typed or picked from the staff list. */
+  driver: string
+  guard: string
 }
+
+export const newTrain = (id: string): TrainCheck => ({ id, setName: null, loco: null, carriages: [], driver: '', guard: '' })
 
 /**
  * A ticked check. Anything wrong is fixed before ticking, or the vehicle is swapped out,
@@ -279,6 +284,8 @@ export function describeTrainChanges(before: Pick<SafetyCheck, 'trains'>, after:
     if (old.loco?.id !== train.loco?.id)
       changes.push(`${label}: locomotive ${old.loco?.code ?? 'none'} replaced by ${train.loco?.code ?? 'none'}.`)
     if (codes(old) !== codes(train)) changes.push(`${label}: carriages changed from ${codes(old) || 'none'} to ${codes(train) || 'none'}.`)
+    for (const role of ['driver', 'guard'] as const)
+      if (old[role].trim() !== train[role].trim()) changes.push(`${label}: ${role} ${old[role].trim() || 'none'} replaced by ${train[role].trim() || 'none'}.`)
   })
   before.trains.forEach((train) => {
     if (!after.trains.some((t) => t.id === train.id)) changes.push(`A train was removed (${summary(train)}).`)

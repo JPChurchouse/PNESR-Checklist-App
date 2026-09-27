@@ -20,8 +20,8 @@ function sampleCheck(): SafetyCheck {
   const check: SafetyCheck = {
     ...newSafetyCheck('sample', new Date(2026, 8, 27, 9, 30)),
     trains: [
-      { id: 't1', setName: 'CC', loco: loco('DXC'), carriages: cars('CC') },
-      { id: 't2', setName: '3', loco: loco('DG'), carriages: cars('3') },
+      { id: 't1', setName: 'CC', loco: loco('DXC'), carriages: cars('CC'), driver: 'Pat Example', guard: 'Jo Example' },
+      { id: 't2', setName: '3', loco: loco('DG'), carriages: cars('3'), driver: '', guard: '' },
     ],
     managerName: 'Sam Example',
     signature: SIGNATURE,
@@ -40,7 +40,7 @@ describe('buildSafetyCheckPdf', () => {
 
     const text = new TextDecoder('latin1').decode(bytes)
     expect(text.startsWith('%PDF-')).toBe(true)
-    for (const expected of ['Pre-operation Safety Check', 'Sam Example', 'Ready to operate: all 45 checks completed', '09:45', 'Crossing 2 alarm'])
+    for (const expected of ['Pre-operation Safety Check', 'Sam Example', 'Ready to operate: all 45 checks completed', '09:45', 'Pat Example', 'Jo Example', 'Crossing 2 alarm'])
       expect(text).toContain(expected)
     expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(2)
   })

@@ -1,7 +1,9 @@
 import { insertCarriage, MAX_SET_LENGTH } from '../../domain/sets'
 import { snapshotCarriage, snapshotLoco, type TrainCheck } from '../../domain/safetyCheck'
+import { driverProblem, findStaff, guardProblem, type StaffMember } from '../../domain/staff'
 import type { Fleet } from '../../domain/types'
 import { Field, Photo, SpecialtyBadge } from '../../ui/components'
+import { StaffNameInput } from '../../ui/StaffInputs'
 
 /**
  * Picks the loco and carriages for one train. Choosing a set fills in its carriages, which
@@ -11,6 +13,7 @@ export function TrainEditor({
   index,
   train,
   fleet,
+  staff,
   usedIds,
   onChange,
   onRemove,
@@ -19,6 +22,7 @@ export function TrainEditor({
   index: number
   train: TrainCheck
   fleet: Fleet
+  staff: StaffMember[]
   /** Vehicles already in other trains today. */
   usedIds: Set<string>
   onChange: (train: TrainCheck) => void
@@ -84,6 +88,29 @@ export function TrainEditor({
               </option>
             ))}
           </select>
+        </Field>
+      </div>
+
+      <div className="form-grid">
+        <Field label="Driver">
+          <StaffNameInput
+            staff={staff}
+            role="driver"
+            value={train.driver}
+            readOnly={readOnly}
+            problem={driverProblem(findStaff(staff, train.driver), train.loco?.code)}
+            onChange={(driver) => onChange({ ...train, driver })}
+          />
+        </Field>
+        <Field label="Guard">
+          <StaffNameInput
+            staff={staff}
+            role="guard"
+            value={train.guard}
+            readOnly={readOnly}
+            problem={guardProblem(findStaff(staff, train.guard))}
+            onChange={(guard) => onChange({ ...train, guard })}
+          />
         </Field>
       </div>
 

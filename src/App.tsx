@@ -8,6 +8,7 @@ import { LocomotivesPage } from './pages/fleet/LocomotivesPage'
 import { SetEditPage } from './pages/fleet/SetEditPage'
 import { SetsPage } from './pages/fleet/SetsPage'
 import { Home } from './pages/Home'
+import { StaffPage } from './pages/StaffPage'
 import { SafetyCheckPage } from './pages/safety/SafetyCheckPage'
 import { SafetyChecksPage } from './pages/safety/SafetyChecksPage'
 import { TicketSettingsPage } from './pages/settings/TicketSettingsPage'
@@ -28,6 +29,7 @@ const router = createHashRouter([
       { path: 'tickets/:station', element: <TicketSheetsPage /> },
       { path: 'tickets/:station/:id', element: <TicketSheetPage /> },
       { path: 'settings/tickets', element: <TicketSettingsPage /> },
+      { path: 'staff', element: <StaffPage /> },
       {
         path: 'fleet',
         element: <FleetLayout />,
