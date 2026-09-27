@@ -1,3 +1,4 @@
+import { localDate } from '../lib/dates'
 import type { Carriage, Fleet, Locomotive, Specialty } from './types'
 
 export interface CheckItem {
@@ -228,12 +229,6 @@ export const snapshotCarriage = (fleet: Fleet, car: Carriage): CarriageSnapshot 
   livery: liveryOf(fleet, car.liveryId),
   specialty: car.specialty,
 })
-
-/** Today's date on this device, as YYYY-MM-DD. */
-export function localDate(d = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
 
 export function newSafetyCheck(id: string, now = new Date()): SafetyCheck {
   return {

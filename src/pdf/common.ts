@@ -1,4 +1,4 @@
-import type { jsPDF } from 'jspdf'
+import { jsPDF } from 'jspdf'
 
 export { formatDate, formatDateTime } from '../lib/dates'
 
@@ -17,6 +17,37 @@ export const COLOURS = {
 }
 
 export const MARGIN = 14
+
+// The built-in PDF fonts only cover the Windows-1252 character set. Anything else (e.g. macrons,
+// the − sign) is swapped for the nearest character so it never comes out garbled.
+const WIN_ANSI_EXTRAS = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ'
+const REPLACEMENTS: Record<string, string> = { '−': '-', '✓': 'Y', '✕': 'X', '≠': '!=', ' ': ' ', ' ': ' ' }
+
+export function pdfSafe(text: string): string {
+  let out = ''
+  for (const ch of text) {
+    const code = ch.codePointAt(0)!
+    if ((code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff) || ch === '\n' || WIN_ANSI_EXTRAS.includes(ch)) out += ch
+    else if (REPLACEMENTS[ch]) out += REPLACEMENTS[ch]
+    else {
+      const base = ch.normalize('NFD').replace(/[̀-ͯ]/g, '')
+      out += base !== ch && [...base].every((c) => c.codePointAt(0)! < 0x100) ? base : '?'
+    }
+  }
+  return out
+}
+
+/** A4 document whose text (including tables) is passed through `pdfSafe`. */
+export function createDoc(compress: boolean): jsPDF {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress })
+  const text = doc.text.bind(doc)
+  const splitTextToSize = doc.splitTextToSize.bind(doc)
+  const clean = (t: unknown): unknown => (typeof t === 'string' ? pdfSafe(t) : Array.isArray(t) ? t.map(clean) : t)
+  doc.text = ((t: string | string[], ...rest: Parameters<jsPDF['text']> extends [unknown, ...infer R] ? R : never) =>
+    text(clean(t) as string | string[], ...rest)) as jsPDF['text']
+  doc.splitTextToSize = ((t: string, ...rest: [number, object?]) => splitTextToSize(pdfSafe(t), ...rest)) as jsPDF['splitTextToSize']
+  return doc
+}
 
 /** Where the last autoTable finished on the page. */
 export const tableEnd = (doc: jsPDF) => (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY

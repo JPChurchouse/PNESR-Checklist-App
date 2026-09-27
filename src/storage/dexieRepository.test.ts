@@ -84,3 +84,30 @@ describe('upgrading older saved data', () => {
     expect(check!.results['track:run-around']).toBeUndefined()
   })
 })
+
+describe('ticket storage', () => {
+  it('returns default ticket settings until saved', async () => {
+    const repo = freshRepo()
+    const settings = await repo.getTicketSettings()
+    expect(settings.ticketTypes.map((t) => t.name)).toEqual(['One-way', 'Return', 'Supporter', 'Concession'])
+    settings.ticketTypes[0].priceCents = 250
+    await repo.saveTicketSettings(settings)
+    expect((await repo.getTicketSettings()).ticketTypes[0].priceCents).toBe(250)
+  })
+
+  it('lists sheets per station, newest first, and protects completed ones', async () => {
+    const { newTicketSheet, DEFAULT_TICKET_SETTINGS } = await import('../domain/tickets')
+    const repo = freshRepo()
+    const v1 = newTicketSheet('v1', 'victoria', DEFAULT_TICKET_SETTINGS, new Date(2026, 8, 26))
+    const v2 = newTicketSheet('v2', 'victoria', DEFAULT_TICKET_SETTINGS, new Date(2026, 8, 27))
+    const p1 = newTicketSheet('p1', 'playground', DEFAULT_TICKET_SETTINGS, new Date(2026, 8, 27))
+    for (const s of [v1, v2, p1]) await repo.saveTicketSheet(s)
+    expect((await repo.listTicketSheets('victoria')).map((s) => s.id)).toEqual(['v2', 'v1'])
+    expect((await repo.listTicketSheets('playground')).map((s) => s.id)).toEqual(['p1'])
+
+    await repo.saveTicketSheet({ ...v1, completedAt: new Date().toISOString() })
+    await expect(repo.deleteTicketSheet('v1')).rejects.toThrow(StorageRuleError)
+    await repo.deleteTicketSheet('v2')
+    expect((await repo.listTicketSheets('victoria')).map((s) => s.id)).toEqual(['v1'])
+  })
+})

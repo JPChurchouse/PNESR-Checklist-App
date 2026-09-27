@@ -1,4 +1,5 @@
 import type { SafetyCheck } from '../domain/safetyCheck'
+import type { StationId, TicketSettings, TicketSheet } from '../domain/tickets'
 import type { Carriage, CarriageSet, Fleet, Livery, Locomotive } from '../domain/types'
 
 /**
@@ -31,6 +32,17 @@ export interface Repository {
   saveSafetyCheck(check: SafetyCheck): Promise<void>
   /** Rejects with a `StorageRuleError` if the check has been completed. */
   deleteSafetyCheck(id: string): Promise<void>
+
+  /** Ticket types, prices, colours and the float. Returns the defaults until first saved. */
+  getTicketSettings(): Promise<TicketSettings>
+  saveTicketSettings(settings: TicketSettings): Promise<void>
+
+  /** Newest first. */
+  listTicketSheets(station: StationId): Promise<TicketSheet[]>
+  getTicketSheet(id: string): Promise<TicketSheet | undefined>
+  saveTicketSheet(sheet: TicketSheet): Promise<void>
+  /** Rejects with a `StorageRuleError` if the sheet has been completed. */
+  deleteTicketSheet(id: string): Promise<void>
 }
 
 /** A write refused because it would leave the data inconsistent. The message is shown to the user. */

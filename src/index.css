@@ -800,3 +800,199 @@ textarea:focus {
 .history-row:hover {
   border-color: var(--primary);
 }
+
+/* ---------- Ticket sheets ---------- */
+
+.number-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: 100%;
+}
+input.invalid {
+  border-color: var(--danger);
+  border-width: 2px;
+}
+.input-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.money-input {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.money-input .prefix {
+  position: absolute;
+  left: 0.7rem;
+  top: 0.65rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.money-input input {
+  padding-left: 1.5rem;
+}
+input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.colour {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+.swatch {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 4px;
+  border: 1px solid var(--text-muted);
+}
+
+.ticket-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+.ticket-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.ticket-card .sold {
+  font-size: 0.95rem;
+}
+
+.count-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.count-table th,
+.count-table td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+.count-table thead th {
+  background: var(--surface-2);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.count-table tbody th {
+  font-size: 1.05rem;
+  width: 4.5rem;
+}
+.count-table td input {
+  max-width: 7rem;
+  min-height: 40px;
+  padding: 0.35rem 0.5rem;
+}
+.count-table .bags {
+  display: block;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.count-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.count-table tfoot th,
+.count-table tfoot td {
+  border-bottom: 0;
+  font-weight: 700;
+}
+.count-table tr.ok {
+  background: var(--ok-bg);
+}
+.count-table tr.issue {
+  background: var(--danger-bg);
+}
+
+.float-count {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.float-banner,
+.balance-banner {
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+.float-banner ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1.2rem;
+  font-weight: 400;
+}
+.float-banner.ok,
+.balance-banner.balanced {
+  background: var(--ok);
+  color: #fff;
+}
+.float-banner.issue,
+.balance-banner.over,
+.balance-banner.short {
+  background: var(--danger);
+  color: #fff;
+}
+.float-banner.pending {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.balance-banner {
+  font-size: 1.3rem;
+  text-align: center;
+}
+
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.05rem;
+}
+.summary-table th,
+.summary-table td {
+  padding: 0.45rem 0.25rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-weight: 400;
+}
+.summary-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.summary-table tr.total th,
+.summary-table tr.total td {
+  font-weight: 700;
+}
+.summary-table tr.over td,
+.summary-table tr.short td {
+  color: var(--danger);
+}
+.summary-table tr.balanced td {
+  color: var(--ok);
+}
+
+img.receipt {
+  max-width: 220px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.sticky-actions {
+  position: sticky;
+  bottom: 0;
+  padding: 0.75rem 0;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}

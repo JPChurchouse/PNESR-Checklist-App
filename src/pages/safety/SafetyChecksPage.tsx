@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { checkProgress, currentChecks, localDate, newSafetyCheck, type SafetyCheck } from '../../domain/safetyCheck'
+import { checkProgress, currentChecks, newSafetyCheck, type SafetyCheck } from '../../domain/safetyCheck'
 import { newId } from '../../lib/ids'
-import { formatDate } from '../../lib/dates'
+import { formatDate, localDate } from '../../lib/dates'
 import { useRepository } from '../../storage/hooks'
 import { ErrorNotice } from '../../ui/components'
 

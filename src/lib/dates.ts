@@ -1,3 +1,9 @@
+/** Today's date on this device, as YYYY-MM-DD. */
+export function localDate(d = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 /** "Sunday, 27 September 2026" from a YYYY-MM-DD local date. */
 export function formatDate(isoDate: string): string {
   const [y, m, d] = isoDate.split('-').map(Number)

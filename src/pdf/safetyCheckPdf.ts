@@ -1,9 +1,10 @@
-import { jsPDF } from 'jspdf'
+import type { jsPDF } from 'jspdf'
 import { autoTable, type CellHookData, type RowInput } from 'jspdf-autotable'
 import { buildChecklist, checkProgress, describeTrainChanges, type ChecklistGroup, type SafetyCheck } from '../domain/safetyCheck'
 import { SPECIALTY_LABELS } from '../domain/types'
 import {
   COLOURS,
+  createDoc,
   drawFacts,
   drawFooters,
   drawHeader,
@@ -58,7 +59,7 @@ function vehicleRows(check: SafetyCheck, groups: ChecklistGroup[]): RowInput[] {
  * @param compress false keeps the text readable in the raw bytes, for tests
  */
 export function buildSafetyCheckPdf(check: SafetyCheck, chain: SafetyCheck[] = [check], { compress = true } = {}): jsPDF {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress })
+  const doc = createDoc(compress)
   const groups = buildChecklist(check)
   const progress = checkProgress(check)
   const cancelled = check.outcome === 'cancelled'

@@ -10,6 +10,9 @@ import { SetsPage } from './pages/fleet/SetsPage'
 import { Home } from './pages/Home'
 import { SafetyCheckPage } from './pages/safety/SafetyCheckPage'
 import { SafetyChecksPage } from './pages/safety/SafetyChecksPage'
+import { TicketSettingsPage } from './pages/settings/TicketSettingsPage'
+import { TicketSheetPage } from './pages/tickets/TicketSheetPage'
+import { TicketSheetsPage } from './pages/tickets/TicketSheetsPage'
 import type { Repository } from './storage/repository'
 import { RepositoryProvider } from './storage/RepositoryProvider'
 import { Layout } from './ui/Layout'
@@ -22,6 +25,9 @@ const router = createHashRouter([
       { index: true, element: <Home /> },
       { path: 'safety', element: <SafetyChecksPage /> },
       { path: 'safety/:id', element: <SafetyCheckPage /> },
+      { path: 'tickets/:station', element: <TicketSheetsPage /> },
+      { path: 'tickets/:station/:id', element: <TicketSheetPage /> },
+      { path: 'settings/tickets', element: <TicketSettingsPage /> },
       {
         path: 'fleet',
         element: <FleetLayout />,

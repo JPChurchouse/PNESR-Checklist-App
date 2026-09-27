@@ -1,6 +1,7 @@
 import Dexie, { liveQuery, type EntityTable } from 'dexie'
 import type { SafetyCheck } from '../domain/safetyCheck'
 import { seedFleet } from '../domain/seed'
+import { DEFAULT_TICKET_SETTINGS, type StationId, type TicketSettings, type TicketSheet } from '../domain/tickets'
 import type { Carriage, CarriageSet, Fleet, Livery, Locomotive } from '../domain/types'
 import { StorageRuleError, type Repository } from './repository'
 
@@ -10,6 +11,8 @@ class Db extends Dexie {
   carriages!: EntityTable<Carriage, 'id'>
   sets!: EntityTable<CarriageSet, 'id'>
   safetyChecks!: EntityTable<SafetyCheck, 'id'>
+  settings!: EntityTable<{ id: string; value: unknown }, 'id'>
+  ticketSheets!: EntityTable<TicketSheet, 'id'>
 
   constructor(name: string) {
     super(name)
@@ -41,6 +44,10 @@ class Db extends Dexie {
           check.amendmentReason ??= ''
         }),
     )
+    this.version(4).stores({
+      settings: 'id',
+      ticketSheets: 'id, [station+startedAt]',
+    })
     this.on('populate', (tx) => {
       const fleet = seedFleet()
       tx.table('liveries').bulkAdd(fleet.liveries)
@@ -146,6 +153,36 @@ export class DexieRepository implements Repository {
 
   async saveSafetyCheck(check: SafetyCheck) {
     await this.db.safetyChecks.put(check)
+  }
+
+  async getTicketSettings() {
+    const row = await this.db.settings.get('tickets')
+    return (row?.value as TicketSettings | undefined) ?? structuredClone(DEFAULT_TICKET_SETTINGS)
+  }
+
+  async saveTicketSettings(settings: TicketSettings) {
+    await this.db.settings.put({ id: 'tickets', value: settings })
+  }
+
+  async listTicketSheets(station: StationId) {
+    return this.db.ticketSheets.where('[station+startedAt]').between([station, ''], [station, '￿']).reverse().toArray()
+  }
+
+  async getTicketSheet(id: string) {
+    return this.db.ticketSheets.get(id)
+  }
+
+  async saveTicketSheet(sheet: TicketSheet) {
+    await this.db.ticketSheets.put(sheet)
+  }
+
+  async deleteTicketSheet(id: string) {
+    const { db } = this
+    await db.transaction('rw', db.ticketSheets, async () => {
+      const sheet = await db.ticketSheets.get(id)
+      if (sheet?.completedAt) throw new StorageRuleError('A completed ticket sheet is a record and can’t be deleted.')
+      await db.ticketSheets.delete(id)
+    })
   }
 
   async deleteSafetyCheck(id: string) {
