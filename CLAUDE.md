@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `npm run dev`: dev server at http://localhost:5173
 - `npm test`: Vitest, run once. Test files have their own `tsconfig.test.json` (Node types allowed there, not in app code) (`npm run test:watch` to watch; `npx vitest run src/domain/sets.test.ts` for one file, `-t "<name>"` for one test)
-- `npm run typecheck` / `npm run lint` (oxlint) / `npm run build`
+- `npm run typecheck` / `npm run lint` (oxlint) / `npm run build`; `npm run preview` serves the build (the service worker only runs there, not in dev)
 - `PDF_PREVIEW=<dir> npx vitest run src/pdf`: writes sample PDFs into `<dir>` to look at the layout
 - `npm run images`: regenerate `public/fleet/*.webp` and `public/brand/*` from the originals in `fleet-images/` and `brand-images/`. Run it after adding or replacing a photo.
 
-The full requirements are in `prompt.md`. Build order: (1) fleet data and admin, done; (2) safety check and PDF, done; (3) ticket sheets, reconciliation and PDF, done; (4) offline/PWA, history, fleet export/import, deployment.
+The full requirements are in `prompt.md`. All planned phases are done: fleet admin, safety check, ticket sheets, staff list, and phase 4 (offline/PWA, backup and restore, practice mode, sharing PDFs, printable blank forms, season stats, GitHub Pages workflow).
 
 ## Architecture
 
@@ -55,6 +55,15 @@ Decided for now: device-only (IndexedDB on each phone/tablet). A Raspberry Pi se
 ## Known inconsistencies in the spec
 
 - The user has no spell checker, so `prompt.md` has typos ("Locmotives", "Speacialty", "Burgandy", "wether", "maintainance", "discrepincy", "seperate", "ammount"). Use the correct spellings in code and UI, and write "KiwiRail" rather than "Kiwirail".
+
+## Phase 4 pieces
+
+- **Practice mode** (`src/lib/mode.ts`, `useMode()`): a separate IndexedDB (`pnesr-practice`) chosen at startup in `main.tsx`, seeded with `generateStaff()`. `generateSampleSeason()` (`src/domain/practiceData.ts`) makes seeded, realistic records. Practice PDFs are marked via `createDoc({ practice })`. Use practice mode (or another origin) for browser testing, never the live database: it may hold real staff details.
+- **Backup** (`src/domain/backup.ts`, `Repository.exportAll/restoreAll`): one JSON file of everything. Bump `version` and handle old files in `parseBackup` if the shape changes.
+- **Sharing** (`src/lib/files.ts`, `ui/PdfActions.tsx`): Web Share with the file, falling back to download plus `mailto:`.
+- **Blank forms** (`src/pdf/blankForms.ts`): built from the same checklist and ticket settings, so they follow config changes.
+- **Stats** (`src/domain/stats.ts`, `pages/stats/`): signed-off, latest-revision records only; a current year is compared with last year up to the same date. Charts are hand-made SVG following the dataviz rules: validated colours `--viz-accent` / `--viz-context`, tooltips, table view.
+- **PWA**: `vite-plugin-pwa` with `registerType: 'prompt'` (`ui/AppUpdates.tsx` shows the update toast and install prompt).
 
 ## Staff data
 

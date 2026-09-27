@@ -3,6 +3,7 @@ import { STATION_IDS, STATIONS } from '../domain/tickets'
 import { formatDateTime } from '../lib/dates'
 import { backupOverdue, lastBackupAt } from '../lib/backupReminder'
 import { useMode } from '../lib/modeContext'
+import { InstallPrompt } from '../ui/AppUpdates'
 
 const TOOLS: [path: string, title: string, description: string][] = [
   ['/fleet', 'Fleet', 'Locomotives, carriages, carriage sets and liveries.'],
@@ -29,6 +30,8 @@ export function Home() {
           </Link>
         </div>
       )}
+
+      <InstallPrompt />
 
       <h1>Today</h1>
       <div className="home-grid">

@@ -1296,3 +1296,27 @@ select.add-staff {
   margin: 0;
   padding-left: 1.2rem;
 }
+
+/* ---------- App updates ---------- */
+
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 32px));
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--primary);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+.app-toast span {
+  flex: 1 1 14rem;
+}

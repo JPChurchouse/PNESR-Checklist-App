@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, Outlet } from 'react-router-dom'
 import { switchMode } from '../lib/mode'
 import { useMode } from '../lib/modeContext'
+import { UpdateBanner } from './AppUpdates'
 
 export function Layout() {
   const [logoMissing, setLogoMissing] = useState(false)
@@ -32,6 +33,7 @@ export function Layout() {
       <main>
         <Outlet />
       </main>
+      <UpdateBanner />
     </>
   )
 }
