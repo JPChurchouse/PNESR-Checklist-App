@@ -1,4 +1,4 @@
-import type { Carriage, CarriageSet } from './types'
+import type { Carriage, CarriageSet, Specialty } from './types'
 
 export const MIN_SET_LENGTH = 2
 export const MAX_SET_LENGTH = 6
@@ -67,3 +67,11 @@ export function validateSet(
 }
 
 export const hasErrors = (issues: SetIssue[]) => issues.some((i) => i.level === 'error')
+
+/** Driver carriages go to the front, guard carriages to the back, anything else just in front of the guard. */
+export function insertCarriage<T extends { specialty: Specialty }>(cars: T[], car: T): T[] {
+  if (car.specialty === 'driver') return [car, ...cars]
+  if (car.specialty === 'guard') return [...cars, car]
+  const last = cars.at(-1)
+  return last?.specialty === 'guard' ? [...cars.slice(0, -1), car, last] : [...cars, car]
+}

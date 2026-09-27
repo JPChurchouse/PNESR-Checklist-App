@@ -8,6 +8,8 @@ import { LocomotivesPage } from './pages/fleet/LocomotivesPage'
 import { SetEditPage } from './pages/fleet/SetEditPage'
 import { SetsPage } from './pages/fleet/SetsPage'
 import { Home } from './pages/Home'
+import { SafetyCheckPage } from './pages/safety/SafetyCheckPage'
+import { SafetyChecksPage } from './pages/safety/SafetyChecksPage'
 import type { Repository } from './storage/repository'
 import { RepositoryProvider } from './storage/RepositoryProvider'
 import { Layout } from './ui/Layout'
@@ -18,6 +20,8 @@ const router = createHashRouter([
     element: <Layout />,
     children: [
       { index: true, element: <Home /> },
+      { path: 'safety', element: <SafetyChecksPage /> },
+      { path: 'safety/:id', element: <SafetyCheckPage /> },
       {
         path: 'fleet',
         element: <FleetLayout />,

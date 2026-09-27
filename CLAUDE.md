@@ -5,11 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - `npm run dev`: dev server at http://localhost:5173
-- `npm test`: Vitest, run once (`npm run test:watch` to watch; `npx vitest run src/domain/sets.test.ts` for one file, `-t "<name>"` for one test)
+- `npm test`: Vitest, run once. Test files have their own `tsconfig.test.json` (Node types allowed there, not in app code) (`npm run test:watch` to watch; `npx vitest run src/domain/sets.test.ts` for one file, `-t "<name>"` for one test)
 - `npm run typecheck` / `npm run lint` (oxlint) / `npm run build`
+- `PDF_PREVIEW=out.pdf npx vitest run src/pdf`: writes a sample PDF to look at the layout
 - `npm run images`: regenerate `public/fleet/*.webp` and `public/brand/*` from the originals in `fleet-images/` and `brand-images/`. Run it after adding or replacing a photo.
 
-The full requirements are in `prompt.md`. Build order: (1) fleet data and admin, done; (2) safety check and PDF; (3) ticket sheets, reconciliation and PDF; (4) offline/PWA, history, fleet export/import, deployment.
+The full requirements are in `prompt.md`. Build order: (1) fleet data and admin, done; (2) safety check and PDF, done; (3) ticket sheets, reconciliation and PDF; (4) offline/PWA, history, fleet export/import, deployment.
 
 ## Architecture
 
@@ -17,6 +18,9 @@ React 19 + TypeScript + Vite, with `createHashRouter` and `base: './'` so the bu
 
 - `src/domain/`: pure types and rules with no React or storage code (`types.ts`, `seed.ts` default fleet, `sets.ts` set validation). Money/ticket logic belongs here too, with tests.
 - `src/storage/`: `repository.ts` is the only interface the UI uses. `DexieRepository` (IndexedDB) seeds the fleet on first open. A future Raspberry Pi backend would be another `Repository` implementation passed in from `main.tsx`. Screens use `useRepository()` / `useFleet()` from `hooks.ts`. `StorageRuleError` messages are shown to the user.
+- `src/domain/safetyCheck.ts`: check definitions, `buildChecklist()` (which checks apply to the day's trains), progress and sign-off rules. Results are keyed `"<vehicleId|track>:<itemId>"`. A check stores snapshots of the vehicles, so fleet edits never alter a completed record, and it becomes read-only once `completedAt` is set.
+- `src/pdf/`: jsPDF + jspdf-autotable. It's loaded with `import()` only when a PDF is made, to keep the main bundle small. In dev, Vite reloads the page the first time that chunk loads.
+- `SafetyCheckPage` saves on every change. `update()` takes a function and builds on a `latest` ref, because building from the render's copy lost rapid taps.
 - `src/pages/fleet/`: `FleetLayout` loads the fleet once and passes it down via outlet context (`useFleetData()`).
 - Vehicles have an internal `id` separate from the user-facing `code`, so an ID can be renamed without breaking set references. Liveries are their own records, referenced by `liveryId`.
 - A `Photo` is either a path under `public/` or a `data:` URL from an in-app upload (resized to 960px). Keep it JSON-serialisable.

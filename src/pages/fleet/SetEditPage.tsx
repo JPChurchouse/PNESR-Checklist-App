@@ -1,20 +1,12 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { hasErrors, MAX_SET_LENGTH, validateSet } from '../../domain/sets'
-import type { Carriage, CarriageSet } from '../../domain/types'
+import { hasErrors, insertCarriage, MAX_SET_LENGTH, validateSet } from '../../domain/sets'
+import type { CarriageSet } from '../../domain/types'
 import { newId } from '../../lib/ids'
 import { useRepository } from '../../storage/hooks'
 import { ErrorNotice, Field, Photo, SpecialtyBadge } from '../../ui/components'
 import { liveryName, useFleetData } from './fleetData'
 import { Consist } from './SetsPage'
-
-/** Driver carriages go to the front, guard carriages to the back, anything else just in front of the guard. */
-function insertCarriage(ids: string[], car: Carriage, byId: Map<string, Carriage>): string[] {
-  if (car.specialty === 'driver') return [car.id, ...ids]
-  if (car.specialty === 'guard') return [...ids, car.id]
-  const lastIsGuard = byId.get(ids[ids.length - 1])?.specialty === 'guard'
-  return lastIsGuard ? [...ids.slice(0, -1), car.id, ids[ids.length - 1]] : [...ids, car.id]
-}
 
 export function SetEditPage() {
   const { id } = useParams()
@@ -123,7 +115,7 @@ export function SetEditPage() {
             value=""
             onChange={(e) => {
               const car = byId.get(e.target.value)
-              if (car) setIds(insertCarriage(draft.carriageIds, car, byId))
+              if (car) setIds(insertCarriage(draft.carriageIds.map((cid) => byId.get(cid) ?? { id: cid, specialty: 'standard' }), car).map((c) => c.id))
             }}
           >
             <option value="">Choose a carriage…</option>

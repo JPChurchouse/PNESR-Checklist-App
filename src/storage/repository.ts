@@ -1,3 +1,4 @@
+import type { SafetyCheck } from '../domain/safetyCheck'
 import type { Carriage, CarriageSet, Fleet, Livery, Locomotive } from '../domain/types'
 
 /**
@@ -23,6 +24,13 @@ export interface Repository {
 
   saveSet(set: CarriageSet): Promise<void>
   deleteSet(id: string): Promise<void>
+
+  /** Newest first. */
+  listSafetyChecks(): Promise<SafetyCheck[]>
+  getSafetyCheck(id: string): Promise<SafetyCheck | undefined>
+  saveSafetyCheck(check: SafetyCheck): Promise<void>
+  /** Rejects with a `StorageRuleError` if the check has been completed. */
+  deleteSafetyCheck(id: string): Promise<void>
 }
 
 /** A write refused because it would leave the data inconsistent. The message is shown to the user. */

@@ -1,4 +1,5 @@
 import Dexie, { liveQuery, type EntityTable } from 'dexie'
+import type { SafetyCheck } from '../domain/safetyCheck'
 import { seedFleet } from '../domain/seed'
 import type { Carriage, CarriageSet, Fleet, Livery, Locomotive } from '../domain/types'
 import { StorageRuleError, type Repository } from './repository'
@@ -8,6 +9,7 @@ class Db extends Dexie {
   locomotives!: EntityTable<Locomotive, 'id'>
   carriages!: EntityTable<Carriage, 'id'>
   sets!: EntityTable<CarriageSet, 'id'>
+  safetyChecks!: EntityTable<SafetyCheck, 'id'>
 
   constructor(name: string) {
     super(name)
@@ -16,6 +18,9 @@ class Db extends Dexie {
       locomotives: 'id',
       carriages: 'id',
       sets: 'id',
+    })
+    this.version(2).stores({
+      safetyChecks: 'id, startedAt',
     })
     this.on('populate', (tx) => {
       const fleet = seedFleet()
@@ -110,5 +115,26 @@ export class DexieRepository implements Repository {
 
   async deleteSet(id: string) {
     await this.db.sets.delete(id)
+  }
+
+  async listSafetyChecks() {
+    return this.db.safetyChecks.orderBy('startedAt').reverse().toArray()
+  }
+
+  async getSafetyCheck(id: string) {
+    return this.db.safetyChecks.get(id)
+  }
+
+  async saveSafetyCheck(check: SafetyCheck) {
+    await this.db.safetyChecks.put(check)
+  }
+
+  async deleteSafetyCheck(id: string) {
+    const { db } = this
+    await db.transaction('rw', db.safetyChecks, async () => {
+      const check = await db.safetyChecks.get(id)
+      if (check?.completedAt) throw new StorageRuleError('A completed safety check is a record and can’t be deleted.')
+      await db.safetyChecks.delete(id)
+    })
   }
 }
