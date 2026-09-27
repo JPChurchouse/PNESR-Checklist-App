@@ -73,4 +73,4 @@ Decided for now: device-only (IndexedDB on each phone/tablet). A Raspberry Pi se
 
 ## Assets
 
-`fleet-images/` (`loco-<id>.jpg`, `car-<id>.jpg`, about 3 MB each) and `brand-images/` are source originals. Only the resized copies in `public/` ship with the app.
+`fleet-images/` (`loco-<id>.jpg`, `car-<id>.jpg`, about 3 MB each) and `brand-images/` are local originals and stay out of git. The resized copies in `public/fleet` and `public/brand` (about 1.9 MB) are committed and ship with the app; after replacing an original, run `npm run images` and commit the result. The code still copes with a missing photo (placeholder) or logo.

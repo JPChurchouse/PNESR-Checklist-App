@@ -35,7 +35,7 @@ await sharp(logoSrc).resize({ height: 160 }).webp({ quality: 85 }).toFile(path.j
 for (const size of [32, 192, 512]) {
   await sharp(logoSrc)
     .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-    .png()
+    .png({ palette: true, compressionLevel: 9 })
     .toFile(path.join(brandOut, `icon-${size}.png`))
 }
 console.log('brand/logo.webp, brand/icon-*.png')

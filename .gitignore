@@ -23,12 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
-# Photos are interim and stay local until final ones are supplied; the app shows
-# placeholders when they're missing. Regenerate public/ copies with `npm run images`.
+# Original photos are large and stay local. The web-sized copies in public/fleet and
+# public/brand are committed; regenerate them with `npm run images` after replacing an original.
 fleet-images/
 brand-images/
-public/fleet/
-public/brand/
 
 # Staff data exported from the club spreadsheet: personal details, never commit.
 staff-list*.csv
