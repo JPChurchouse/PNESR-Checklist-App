@@ -1,10 +1,23 @@
 import { useState } from 'react'
 import { Link, Outlet } from 'react-router-dom'
+import { switchMode } from '../lib/mode'
+import { useMode } from '../lib/modeContext'
 
 export function Layout() {
   const [logoMissing, setLogoMissing] = useState(false)
+  const mode = useMode()
   return (
     <>
+      {mode === 'practice' && (
+        <div className="practice-banner" role="status">
+          <span>
+            <strong>Practice mode</strong>: nothing here is a real record.
+          </span>
+          <button type="button" onClick={() => switchMode('live')}>
+            Leave practice mode
+          </button>
+        </div>
+      )}
       <header className="app-header">
         <div className="app-header-inner">
           <Link to="/">

@@ -1037,3 +1037,50 @@ select.add-staff {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* ---------- Practice mode ---------- */
+
+.practice-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 1rem;
+  padding: 0.45rem 16px;
+  background: repeating-linear-gradient(-45deg, #e8840c, #e8840c 14px, #d97706 14px, #d97706 28px);
+  color: #1a1204;
+  font-size: 0.95rem;
+}
+.practice-banner button {
+  font: inherit;
+  font-weight: 700;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  border: 2px solid #1a1204;
+  background: #fff7e6;
+  color: #1a1204;
+  cursor: pointer;
+}
+.practice-banner ~ main .progress-bar {
+  top: 2.4rem;
+}
+.pdf-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.section-heading {
+  margin-top: 2rem;
+}
+.home-grid.tools .home-card {
+  border-left-color: var(--border);
+}
+.home-grid.tools .home-card h3 {
+  margin: 0;
+}
+.stats-card {
+  border-left-color: var(--accent);
+}

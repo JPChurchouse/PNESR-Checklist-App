@@ -168,3 +168,30 @@ describe('staff storage', () => {
     expect((await repo.listStaff()).map((s) => s.firstName)).toEqual(['Bo'])
   })
 })
+
+describe('backups', () => {
+  it('exports everything and restores it into another database', async () => {
+    const { newTicketSheet, DEFAULT_TICKET_SETTINGS } = await import('../domain/tickets')
+    const { newSafetyCheck } = await import('../domain/safetyCheck')
+    const source = freshRepo()
+    await source.saveSafetyCheck(newSafetyCheck('c1'))
+    await source.saveTicketSheet(newTicketSheet('s1', 'victoria', DEFAULT_TICKET_SETTINGS))
+    const cc = (await source.getFleet()).liveries.find((l) => l.name === 'Capital Connection')!
+    await source.saveLivery({ ...cc, name: 'Renamed' })
+    const backup = JSON.parse(JSON.stringify(await source.exportAll()))
+
+    const target = freshRepo()
+    await target.saveSafetyCheck(newSafetyCheck('only-in-target'))
+    await target.restoreAll(backup)
+    expect((await target.listSafetyChecks()).map((c) => c.id)).toEqual(['c1'])
+    expect((await target.listTicketSheets('victoria')).map((s) => s.id)).toEqual(['s1'])
+    expect((await target.getFleet()).liveries.some((l) => l.name === 'Renamed')).toBe(true)
+  })
+
+  it('seeds a practice staff list when asked', async () => {
+    const repo = new DexieRepository(`test-${++dbCount}`, () => [
+      { id: 'p1', firstName: 'Practice', surname: 'Person', displayName: 'Practice P', mobile: '', landLine: '', manager: true, cashier: false, guard: false, driver: false, classA: [] },
+    ])
+    expect((await repo.listStaff()).map((s) => s.firstName)).toEqual(['Practice'])
+  })
+})

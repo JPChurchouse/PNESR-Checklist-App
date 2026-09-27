@@ -1,4 +1,4 @@
-import { jsPDF } from 'jspdf'
+import { GState, jsPDF } from 'jspdf'
 
 import { formatDateTime } from '../lib/dates'
 
@@ -16,6 +16,7 @@ export const COLOURS = {
   muted: [91, 97, 73] as const,
   text: [31, 36, 18] as const,
   rowAlt: [245, 246, 236] as const,
+  practice: [217, 119, 6] as const,
 }
 
 export const MARGIN = 14
@@ -39,9 +40,20 @@ export function pdfSafe(text: string): string {
   return out
 }
 
+/** Documents made in practice mode: orange header, "PRACTICE" watermark and footer. */
+const practiceDocs = new WeakSet<jsPDF>()
+
+export interface DocOptions {
+  /** false keeps the text readable in the raw bytes, for tests */
+  compress?: boolean
+  /** Made in practice mode, so marked as not a real record. */
+  practice?: boolean
+}
+
 /** A4 document whose text (including tables) is passed through `pdfSafe`. */
-export function createDoc(compress: boolean): jsPDF {
+export function createDoc({ compress = true, practice = false }: DocOptions = {}): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress })
+  if (practice) practiceDocs.add(doc)
   const text = doc.text.bind(doc)
   const splitTextToSize = doc.splitTextToSize.bind(doc)
   const clean = (t: unknown): unknown => (typeof t === 'string' ? pdfSafe(t) : Array.isArray(t) ? t.map(clean) : t)
@@ -58,7 +70,9 @@ export const tableEnd = (doc: jsPDF) => (doc as unknown as { lastAutoTable: { fi
 /** Green band across the top of the first page with the document title. */
 export function drawHeader(doc: jsPDF, title: string) {
   const width = doc.internal.pageSize.getWidth()
-  doc.setFillColor(...COLOURS.fernDark)
+  const practice = practiceDocs.has(doc)
+  const [r, g, b] = practice ? COLOURS.practice : COLOURS.fernDark
+  doc.setFillColor(r, g, b)
   doc.rect(0, 0, width, 26, 'F')
   doc.setFillColor(...COLOURS.red)
   doc.rect(0, 26, width, 1.2, 'F')
@@ -68,7 +82,7 @@ export function drawHeader(doc: jsPDF, title: string) {
   doc.text(ORG_NAME, MARGIN, 10)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(18)
-  doc.text(title, MARGIN, 20)
+  doc.text(practice ? `${title} (PRACTICE)` : title, MARGIN, 20)
   doc.setTextColor(...COLOURS.text)
   return 36
 }
@@ -158,8 +172,17 @@ export function drawFooters(doc: jsPDF, label: string) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8.5)
     doc.setTextColor(...COLOURS.muted)
-    doc.text(`${ORG_NAME} · ${label}`, MARGIN, height - 8)
+    doc.text(`${practiceDocs.has(doc) ? 'PRACTICE - NOT A REAL RECORD · ' : ''}${ORG_NAME} · ${label}`, MARGIN, height - 8)
     doc.text(`Page ${i} of ${pages}`, width - MARGIN, height - 8, { align: 'right' })
+    if (practiceDocs.has(doc)) {
+      doc.saveGraphicsState()
+      doc.setGState(new GState({ opacity: 0.12 }))
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(96)
+      doc.setTextColor(...COLOURS.practice)
+      doc.text('PRACTICE', width / 2, height / 2, { align: 'center', angle: 45, baseline: 'middle' })
+      doc.restoreGraphicsState()
+    }
   }
   doc.setTextColor(...COLOURS.text)
 }

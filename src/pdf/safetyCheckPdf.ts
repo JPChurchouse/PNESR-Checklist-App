@@ -5,6 +5,7 @@ import { SPECIALTY_LABELS } from '../domain/types'
 import {
   COLOURS,
   createDoc,
+  type DocOptions,
   drawFacts,
   drawFooters,
   drawHeader,
@@ -55,10 +56,9 @@ function vehicleRows(check: SafetyCheck, groups: ChecklistGroup[]): RowInput[] {
 
 /**
  * @param chain every revision up to and including `check`, oldest first (just `[check]` if never amended)
- * @param compress false keeps the text readable in the raw bytes, for tests
  */
-export function buildSafetyCheckPdf(check: SafetyCheck, chain: SafetyCheck[] = [check], { compress = true } = {}): jsPDF {
-  const doc = createDoc(compress)
+export function buildSafetyCheckPdf(check: SafetyCheck, chain: SafetyCheck[] = [check], options: DocOptions = {}): jsPDF {
+  const doc = createDoc(options)
   const groups = buildChecklist(check)
   const progress = checkProgress(check)
   const cancelled = check.outcome === 'cancelled'

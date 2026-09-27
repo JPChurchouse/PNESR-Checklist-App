@@ -26,15 +26,22 @@ import { cashierProblems, findStaff, fullName, managerProblem } from '../../doma
 import { useRepository, useStaff } from '../../storage/hooks'
 import { ErrorNotice, Field } from '../../ui/components'
 import { ColourSwatch, MoneyInput, WholeInput } from '../../ui/inputs'
+import { downloadBlob } from '../../lib/files'
+import { useMode } from '../../lib/modeContext'
+import { PdfActions, type MadePdf } from '../../ui/PdfActions'
 import { SignaturePad } from '../../ui/SignaturePad'
 import { AddStaffSelect, StaffNameInput } from '../../ui/StaffInputs'
 import { CashCount, FloatCheckList } from './CashCount'
 
 /** `chain` is every revision up to and including `sheet`, oldest first. */
-async function downloadPdf(sheet: TicketSheet, chain: TicketSheet[]) {
+async function makePdf(sheet: TicketSheet, chain: TicketSheet[], practice: boolean): Promise<MadePdf> {
   // Loaded on demand: the PDF library is large and only needed at the end.
   const { buildTicketSheetPdf, ticketSheetFilename } = await import('../../pdf/ticketSheetPdf')
-  buildTicketSheetPdf(sheet, chain).save(ticketSheetFilename(sheet))
+  return {
+    blob: buildTicketSheetPdf(sheet, chain, { practice }).output('blob'),
+    filename: ticketSheetFilename(sheet),
+    subject: `${practice ? 'PRACTICE ' : ''}${sheetTitle(sheet)} ticket sheet ${sheet.date}${sheet.revision > 1 ? ` (revision ${sheet.revision})` : ''}`,
+  }
 }
 
 export function TicketSheetPage() {
@@ -69,6 +76,7 @@ function TicketSheetForm({ initial, all }: { initial: TicketSheet; all: TicketSh
   const repo = useRepository()
   const navigate = useNavigate()
   const staff = useStaff()
+  const mode = useMode()
   const [sheet, setSheet] = useState(initial)
   // Latest version, so quick successive edits each build on the one before.
   const latest = useRef(initial)
@@ -104,7 +112,7 @@ function TicketSheetForm({ initial, all }: { initial: TicketSheet; all: TicketSh
   const floatStart = checkFloat(sheet.float, sheet.floatStart)
   const floatEnd = checkFloat(sheet.float, sheet.floatEnd)
   const changes = previous ? describeSheetChanges(previous, sheet) : []
-  const pdf = (s: TicketSheet) => downloadPdf(s, revisionChainOf(s, [...all.filter((x) => x.id !== s.id), s])).catch(setOtherError)
+  const pdfFor = (s: TicketSheet) => makePdf(s, revisionChainOf(s, [...all.filter((x) => x.id !== s.id), s]), mode === 'practice')
 
   async function addReceipt(file: File | undefined) {
     if (!file) return
@@ -119,7 +127,12 @@ function TicketSheetForm({ initial, all }: { initial: TicketSheet; all: TicketSh
   async function complete() {
     if (toComplete.length) return
     update((s) => ({ ...s, completedAt: new Date().toISOString() }))
-    await pdf(latest.current)
+    try {
+      const made = await pdfFor(latest.current)
+      downloadBlob(made.blob, made.filename)
+    } catch (err) {
+      setOtherError(err)
+    }
   }
 
   async function amend() {
@@ -152,9 +165,7 @@ function TicketSheetForm({ initial, all }: { initial: TicketSheet; all: TicketSh
             Signed off {formatDateTime(sheet.completedAt!)} by {sheet.managerName}. <strong>{balanceText(r)}</strong>
           </span>
           <span className="actions">
-            <button type="button" className="btn primary" onClick={() => pdf(sheet)}>
-              Download PDF
-            </button>
+            <PdfActions make={() => pdfFor(sheet)} />
             {amendment ? (
               <Link className="btn" to={`${listPath}/${amendment.id}`}>
                 {amendment.completedAt ? `See revision ${amendment.revision}` : 'Continue correction'}

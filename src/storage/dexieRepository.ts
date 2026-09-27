@@ -1,4 +1,5 @@
 import Dexie, { liveQuery, type EntityTable } from 'dexie'
+import type { BackupContents } from '../domain/backup'
 import type { SafetyCheck } from '../domain/safetyCheck'
 import { seedFleet } from '../domain/seed'
 import type { StaffMember } from '../domain/staff'
@@ -16,7 +17,7 @@ class Db extends Dexie {
   ticketSheets!: EntityTable<TicketSheet, 'id'>
   staff!: EntityTable<StaffMember, 'id'>
 
-  constructor(name: string) {
+  constructor(name: string, seedStaff?: (fleet: Fleet) => StaffMember[]) {
     super(name)
     this.version(1).stores({
       liveries: 'id',
@@ -101,6 +102,7 @@ class Db extends Dexie {
       tx.table('locomotives').bulkAdd(fleet.locomotives)
       tx.table('carriages').bulkAdd(fleet.carriages)
       tx.table('sets').bulkAdd(fleet.sets)
+      if (seedStaff) tx.table('staff').bulkAdd(seedStaff(fleet))
     })
   }
 }
@@ -112,8 +114,9 @@ const byCode = <T extends { code: string }>(a: T, b: T) =>
 export class DexieRepository implements Repository {
   private db: Db
 
-  constructor(name = 'pnesr') {
-    this.db = new Db(name)
+  /** `seedStaff` fills the staff list when the database is first created (practice mode). */
+  constructor(name = 'pnesr', seedStaff?: (fleet: Fleet) => StaffMember[]) {
+    this.db = new Db(name, seedStaff)
   }
 
   async getFleet(): Promise<Fleet> {
@@ -241,6 +244,40 @@ export class DexieRepository implements Repository {
     await db.transaction('rw', db.staff, async () => {
       await db.staff.clear()
       await db.staff.bulkAdd(staff)
+    })
+  }
+
+  async exportAll(): Promise<BackupContents> {
+    const { db } = this
+    return db.transaction('r', db.tables, async () => ({
+      fleet: await this.getFleet(),
+      ticketSettings: await this.getTicketSettings(),
+      safetyChecks: await db.safetyChecks.toArray(),
+      ticketSheets: await db.ticketSheets.toArray(),
+      staff: await db.staff.toArray(),
+    }))
+  }
+
+  async restoreAll(c: BackupContents) {
+    const { db } = this
+    await db.transaction('rw', db.tables, async () => {
+      await Promise.all(db.tables.map((t) => t.clear()))
+      await db.liveries.bulkAdd(c.fleet.liveries)
+      await db.locomotives.bulkAdd(c.fleet.locomotives)
+      await db.carriages.bulkAdd(c.fleet.carriages)
+      await db.sets.bulkAdd(c.fleet.sets)
+      await db.settings.put({ id: 'tickets', value: c.ticketSettings })
+      await db.safetyChecks.bulkAdd(c.safetyChecks)
+      await db.ticketSheets.bulkAdd(c.ticketSheets)
+      await db.staff.bulkAdd(c.staff)
+    })
+  }
+
+  async addRecords({ safetyChecks = [], ticketSheets = [] }: { safetyChecks?: SafetyCheck[]; ticketSheets?: TicketSheet[] }) {
+    const { db } = this
+    await db.transaction('rw', db.safetyChecks, db.ticketSheets, async () => {
+      await db.safetyChecks.bulkPut(safetyChecks)
+      await db.ticketSheets.bulkPut(ticketSheets)
     })
   }
 

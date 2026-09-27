@@ -21,16 +21,23 @@ import { newId } from '../../lib/ids'
 import { findStaff, managerProblem } from '../../domain/staff'
 import { useFleet, useRepository, useStaff } from '../../storage/hooks'
 import { ErrorNotice, Field } from '../../ui/components'
+import { downloadBlob } from '../../lib/files'
+import { useMode } from '../../lib/modeContext'
+import { PdfActions, type MadePdf } from '../../ui/PdfActions'
 import { SignaturePad } from '../../ui/SignaturePad'
 import { StaffNameInput } from '../../ui/StaffInputs'
 import { CheckGroupCard } from './CheckGroupCard'
 import { TrainEditor } from './TrainEditor'
 
 /** `chain` is every revision up to and including `check`, oldest first. */
-async function downloadPdf(check: SafetyCheck, chain: SafetyCheck[]) {
+async function makePdf(check: SafetyCheck, chain: SafetyCheck[], practice: boolean): Promise<MadePdf> {
   // Loaded on demand: the PDF library is large and only needed at the end.
   const { buildSafetyCheckPdf, safetyCheckFilename } = await import('../../pdf/safetyCheckPdf')
-  buildSafetyCheckPdf(check, chain).save(safetyCheckFilename(check))
+  return {
+    blob: buildSafetyCheckPdf(check, chain, { practice }).output('blob'),
+    filename: safetyCheckFilename(check),
+    subject: `${practice ? 'PRACTICE ' : ''}Safety check ${check.date}${check.revision > 1 ? ` (revision ${check.revision})` : ''}`,
+  }
 }
 
 export function SafetyCheckPage() {
@@ -60,6 +67,7 @@ function SafetyCheckForm({ initial, all, fleet }: { initial: SafetyCheck; all: S
   const repo = useRepository()
   const navigate = useNavigate()
   const staff = useStaff()
+  const mode = useMode()
   const [check, setCheck] = useState(initial)
   // Latest version, so quick successive taps each build on the one before rather than a stale render.
   const latest = useRef(initial)
@@ -94,12 +102,17 @@ function SafetyCheckForm({ initial, all, fleet }: { initial: SafetyCheck; all: S
   const changes = previous ? describeTrainChanges(previous, check) : []
   const photoOf = (vehicleId: string | null) =>
     fleet.locomotives.find((l) => l.id === vehicleId)?.photo ?? fleet.carriages.find((c) => c.id === vehicleId)?.photo ?? null
-  const pdf = (c: SafetyCheck) => downloadPdf(c, revisionChain(c, [...all.filter((x) => x.id !== c.id), c])).catch(setPdfError)
+  const pdfFor = (c: SafetyCheck) => makePdf(c, revisionChain(c, [...all.filter((x) => x.id !== c.id), c]), mode === 'practice')
 
   async function complete() {
     if (!signOff.canComplete) return
     update((c) => pruneResults({ ...c, completedAt: new Date().toISOString() }))
-    await pdf(latest.current)
+    try {
+      const made = await pdfFor(latest.current)
+      downloadBlob(made.blob, made.filename)
+    } catch (err) {
+      setPdfError(err)
+    }
   }
 
   async function amend() {
@@ -142,9 +155,7 @@ function SafetyCheckForm({ initial, all, fleet }: { initial: SafetyCheck; all: S
             Signed off {formatDateTime(check.completedAt!)} by {check.managerName}.
           </span>
           <span className="actions">
-            <button type="button" className="btn primary" onClick={() => pdf(check)}>
-              Download PDF
-            </button>
+            <PdfActions make={() => pdfFor(check)} />
             {amendment ? (
               <Link className="btn" to={`/safety/${amendment.id}`}>
                 {amendment.completedAt ? `See revision ${amendment.revision}` : 'Continue amendment'}

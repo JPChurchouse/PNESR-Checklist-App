@@ -1,3 +1,4 @@
+import type { BackupContents } from '../domain/backup'
 import type { SafetyCheck } from '../domain/safetyCheck'
 import type { StaffMember } from '../domain/staff'
 import type { StationId, TicketSettings, TicketSheet } from '../domain/tickets'
@@ -49,6 +50,13 @@ export interface Repository {
   listStaff(): Promise<StaffMember[]>
   /** Replaces the whole list, e.g. with a fresh import from the club's spreadsheet. */
   replaceStaff(staff: StaffMember[]): Promise<void>
+
+  /** Everything stored, for a backup file. */
+  exportAll(): Promise<BackupContents>
+  /** Replaces everything stored with a backup's contents. */
+  restoreAll(contents: BackupContents): Promise<void>
+  /** Adds (or overwrites) many records at once, e.g. practice mode's sample season. */
+  addRecords(records: { safetyChecks?: SafetyCheck[]; ticketSheets?: TicketSheet[] }): Promise<void>
 }
 
 /** A write refused because it would leave the data inconsistent. The message is shown to the user. */

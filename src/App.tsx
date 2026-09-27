@@ -7,13 +7,17 @@ import { LocomotiveEditPage } from './pages/fleet/LocomotiveEditPage'
 import { LocomotivesPage } from './pages/fleet/LocomotivesPage'
 import { SetEditPage } from './pages/fleet/SetEditPage'
 import { SetsPage } from './pages/fleet/SetsPage'
+import { BackupPage } from './pages/BackupPage'
 import { Home } from './pages/Home'
+import { PracticePage } from './pages/PracticePage'
 import { StaffPage } from './pages/StaffPage'
 import { SafetyCheckPage } from './pages/safety/SafetyCheckPage'
 import { SafetyChecksPage } from './pages/safety/SafetyChecksPage'
 import { TicketSettingsPage } from './pages/settings/TicketSettingsPage'
 import { TicketSheetPage } from './pages/tickets/TicketSheetPage'
 import { TicketSheetsPage } from './pages/tickets/TicketSheetsPage'
+import type { AppMode } from './lib/mode'
+import { ModeContext } from './lib/modeContext'
 import type { Repository } from './storage/repository'
 import { RepositoryProvider } from './storage/RepositoryProvider'
 import { Layout } from './ui/Layout'
@@ -30,6 +34,8 @@ const router = createHashRouter([
       { path: 'tickets/:station/:id', element: <TicketSheetPage /> },
       { path: 'settings/tickets', element: <TicketSettingsPage /> },
       { path: 'staff', element: <StaffPage /> },
+      { path: 'backup', element: <BackupPage /> },
+      { path: 'practice', element: <PracticePage /> },
       {
         path: 'fleet',
         element: <FleetLayout />,
@@ -48,10 +54,12 @@ const router = createHashRouter([
   },
 ])
 
-export function App({ repository }: { repository: Repository }) {
+export function App({ repository, mode }: { repository: Repository; mode: AppMode }) {
   return (
-    <RepositoryProvider repository={repository}>
-      <RouterProvider router={router} />
-    </RepositoryProvider>
+    <ModeContext.Provider value={mode}>
+      <RepositoryProvider repository={repository}>
+        <RouterProvider router={router} />
+      </RepositoryProvider>
+    </ModeContext.Provider>
   )
 }

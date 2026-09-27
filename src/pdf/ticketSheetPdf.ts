@@ -19,6 +19,7 @@ import {
 import {
   COLOURS,
   createDoc,
+  type DocOptions,
   drawFacts,
   drawFooters,
   drawHeader,
@@ -48,10 +49,9 @@ function highlightProblems(data: CellHookData) {
 
 /**
  * @param chain every revision up to and including `sheet`, oldest first (just `[sheet]` if never corrected)
- * @param compress false keeps the text readable in the raw bytes, for tests
  */
-export function buildTicketSheetPdf(sheet: TicketSheet, chain: TicketSheet[] = [sheet], { compress = true } = {}): jsPDF {
-  const doc = createDoc(compress)
+export function buildTicketSheetPdf(sheet: TicketSheet, chain: TicketSheet[] = [sheet], options: DocOptions = {}): jsPDF {
+  const doc = createDoc(options)
   const r = reconcile(sheet)
   const eftpos = resolveEftpos(sheet.eftpos)
 
